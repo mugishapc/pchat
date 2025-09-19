@@ -1,496 +1,868 @@
-{% extends "base.html" %}
-
-{% block content %}
-<div class="chat-container">
-    <header class="chat-header">
-        <h1>ChatP</h1>
-        <div class="user-info">
-            <span>Welcome, {{ username }}</span>
-            <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
-        </div>
-    </header>
-    
-    <div class="chat-layout">
-        <!-- Sidebar for users and conversations -->
-        <div class="sidebar">
-            <div class="sidebar-section">
-                <h3>Users</h3>
-                <ul id="users-list">
-                    {% for user in users %}
-                    <li>
-                        <a href="#" class="user-item" onclick="startConversation({{ user.id }}, '{{ user.username }}')">
-                            <span class="user-avatar">{{ user.username[0]|upper }}</span>
-                            <span class="user-name">{{ user.username }}</span>
-                        </a>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            
-            <div class="sidebar-section">
-                <h3>Conversations</h3>
-                <ul id="conversations-list">
-                    {% for conv in conversations %}
-                    <li>
-                        <a href="#" class="conversation-item" onclick="loadConversation({{ conv.id }}, {{ conv.other_user_id }}, '{{ conv.other_username }}')">
-                            <span class="user-avatar">{{ conv.other_username[0]|upper }}</span>
-                            <span class="user-name">{{ conv.other_username }}</span>
-                        </a>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatP - Real-time Chat Application</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
         
-        <!-- Main chat area -->
-        <div class="main-chat-area">
-            <div class="chat-info-bar" id="chat-info-bar">
-                <span id="current-chat-with">Select a user to start chatting</span>
-            </div>
+        body {
+            background-color: #f5f7fb;
+            color: #333;
+        }
+        
+        .auth-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .auth-form {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .auth-form h2 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 0.8rem;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .btn:hover {
+            background-color: #5a6fd5;
+        }
+        
+        .error {
+            color: #e74c3c;
+            text-align: center;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background-color: #fadbd8;
+            border-radius: 4px;
+        }
+        
+        .auth-link {
+            text-align: center;
+            margin-top: 1rem;
+        }
+        
+        .auth-link a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .chat-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-header {
+            background-color: #667eea;
+            color: white;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logout-btn {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .chat-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .sidebar {
+            width: 250px;
+            background-color: white;
+            border-right: 1px solid #e0e0e0;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        .sidebar-section {
+            margin-bottom: 20px;
+        }
+        
+        .sidebar h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #666;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar li {
+            margin-bottom: 5px;
+        }
+        
+        .user-item, .conversation-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            text-decoration: none;
+            color: #333;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        
+        .user-item:hover, .conversation-item:hover,
+        .user-item.active, .conversation-item.active {
+            background-color: #e9ecef;
+        }
+        
+        .user-avatar {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background-color: #007bff;
+            color: white;
+            border-radius: 50%;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        .user-name {
+            font-size: 14px;
+        }
+        
+        .main-chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-info-bar {
+            padding: 10px 15px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: 500;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background-color: #fff;
+        }
+        
+        .empty-chat {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #6c757d;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+        }
+        
+        .message.sent {
+            text-align: right;
+        }
+        
+        .message.received {
+            text-align: left;
+        }
+        
+        .message-content {
+            display: inline-block;
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        
+        .message.sent .message-content {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .message.received .message-content {
+            background-color: #f1f0f0;
+            color: #333;
+        }
+        
+        .audio-message {
+            margin: 5px 0;
+        }
+        
+        audio {
+            width: 250px;
+            height: 40px;
+        }
+        
+        .message-info {
+            margin-top: 5px;
+            font-size: 12px;
+            color: #777;
+        }
+        
+        .username {
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        
+        .chat-input-container {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .input-group {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        
+        #message-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        #send-btn {
+            margin-left: 10px;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .audio-controls {
+            display: flex;
+            align-items: center;
+        }
+        
+        #record-btn {
+            padding: 8px 15px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        
+        #recording-status {
+            color: #dc3545;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .chat-layout {
+                flex-direction: column;
+            }
             
-            <div class="chat-messages" id="chat-messages">
-                <!-- Messages will be loaded here -->
-                <div class="empty-chat">
-                    <p>Select a conversation or start a new one to begin messaging</p>
-                </div>
-            </div>
-            
-            <div class="chat-input-container" id="chat-input-container" style="display: none;">
-                <div class="input-group">
-                    <input type="text" id="message-input" placeholder="Type your message...">
-                    <button id="send-btn">Send</button>
-                </div>
-                <div class="audio-controls">
-                    <button id="record-btn">Record Voice Message</button>
-                    <span id="recording-status" style="display: none;">Recording...</span>
+            .sidebar {
+                width: 100%;
+                height: 200px;
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Template -->
+    <div id="login-template" style="display: none;">
+        <div class="auth-container">
+            <div class="auth-form">
+                <h2>Login to ChatP</h2>
+                <div id="login-error" class="error"></div>
+                <form id="login-form" method="POST" action="/login">
+                    <div class="form-group">
+                        <label for="login-username">Username</label>
+                        <input type="text" id="login-username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" name="password" required>
+                    </div>
+                    <button type="submit" class="btn">Login</button>
+                </form>
+                <div class="auth-link">
+                    Don't have an account? <a href="/register" id="show-register">Register</a>
                 </div>
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
 
-{% block scripts %}
-<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-<script src="{{ url_for('static', filename='audio-recorder.js') }}"></script>
-<script>
-    // Socket.IO connection
-    const socket = io();
-    let currentConversationId = null;
-    let currentOtherUserId = null;
-    let currentUsername = '{{ username }}';
-    let currentUserId = {{ session['user_id'] }};
-    
-    // Connect to server
-    socket.on('connect', function() {
-        console.log('Connected to server');
-    });
-    
-    // Handle new messages
-    socket.on('new_message', function(data) {
-        if (data.conversation_id === currentConversationId) {
-            addMessageToChat(data);
-        }
-    });
-    
-    // Start a new conversation with a user
-    function startConversation(userId, username) {
-        fetch(`/conversation/${userId}`, {
-            method: 'POST',
-            credentials: 'include'
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to create conversation');
-            }
-            return response.json();
-        })
-        .then(data => {
-            loadConversation(data.conversation_id, userId, username);
-            
-            // Add to conversations list if not already there
-            const convExists = document.querySelector(`#conversations-list li a[onclick*="${data.conversation_id}"]`);
-            if (!convExists) {
-                const convList = document.getElementById('conversations-list');
-                const newConvItem = document.createElement('li');
-                newConvItem.innerHTML = `
-                    <a href="#" class="conversation-item" onclick="loadConversation(${data.conversation_id}, ${userId}, '${username}')">
-                        <span class="user-avatar">${username[0].toUpperCase()}</span>
-                        <span class="user-name">${username}</span>
-                    </a>
-                `;
-                convList.appendChild(newConvItem);
-            }
-        })
-        .catch(error => {
-            console.error('Error starting conversation:', error);
-            alert('Error starting conversation. Please try again.');
-        });
-    }
-    
-    // Load an existing conversation
-    function loadConversation(conversationId, otherUserId, username) {
-        currentConversationId = conversationId;
-        currentOtherUserId = otherUserId;
-        
-        // Update UI
-        document.getElementById('current-chat-with').textContent = `Chat with ${username}`;
-        document.getElementById('chat-input-container').style.display = 'block';
-        
-        // Highlight active conversation
-        document.querySelectorAll('.conversation-item, .user-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        const activeElement = document.querySelector(`a[onclick*="loadConversation(${conversationId}, ${otherUserId}, '${username}')"]`);
-        if (activeElement) {
-            activeElement.classList.add('active');
-        }
-        
-        // Join the conversation room
-        socket.emit('join_conversation', {conversation_id: conversationId});
-        
-        // Load messages with credentials included
-        fetch(`/messages/${conversationId}`, {
-            credentials: 'include'
-        })
-        .then(response => {
-            console.log('Response status:', response.status);
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(`HTTP ${response.status}: ${text}`);
-                });
-            }
-            return response.json();
-        })
-        .then(messages => {
-            console.log('Messages loaded:', messages);
-            const messagesContainer = document.getElementById('chat-messages');
-            messagesContainer.innerHTML = '';
-            
-            if (messages.length === 0) {
-                messagesContainer.innerHTML = `
-                    <div class="empty-chat">
-                        <p>No messages yet. Start the conversation!</p>
+    <!-- Register Template -->
+    <div id="register-template" style="display: none;">
+        <div class="auth-container">
+            <div class="auth-form">
+                <h2>Create an Account</h2>
+                <div id="register-error" class="error"></div>
+                <form id="register-form" method="POST" action="/register">
+                    <div class="form-group">
+                        <label for="register-username">Username</label>
+                        <input type="text" id="register-username" name="username" required>
                     </div>
-                `;
-            } else {
-                messages.forEach(addMessageToChat);
-            }
-            
-            // Scroll to bottom
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        })
-        .catch(error => {
-            console.error('Error loading messages:', error);
-            
-            // Check if it's an authentication error
-            if (error.message.includes('401') || error.message.includes('403')) {
-                alert('Session expired. Please log in again.');
-                window.location.href = '/login';
-            } else {
-                alert('Error loading messages: ' + error.message);
-            }
-        });
-    }
-    
-    // Add a message to the chat UI
-    function addMessageToChat(message) {
-        const messagesContainer = document.getElementById('chat-messages');
-        
-        // Remove empty chat message if it exists
-        const emptyChat = messagesContainer.querySelector('.empty-chat');
-        if (emptyChat) {
-            emptyChat.remove();
-        }
-        
-        const messageElement = document.createElement('div');
-        const isCurrentUser = message.user_id === currentUserId;
-        messageElement.className = `message ${isCurrentUser ? 'sent' : 'received'}`;
-        
-        const timestamp = new Date(message.timestamp);
-        const timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
-        let messageContent = '';
-        
-        if (message.type === 'text') {
-            messageContent = `
-                <div class="message-content">${message.content}</div>
-            `;
-        } else if (message.type === 'audio') {
-            messageContent = `
-                <div class="message-content audio-message">
-                    <audio controls>
-                        <source src="${message.content}" type="audio/webm">
-                        Your browser does not support the audio element.
-                    </audio>
+                    <div class="form-group">
+                        <label for="register-password">Password</label>
+                        <input type="password" id="register-password" name="password" required>
+                    </div>
+                    <button type="submit" class="btn">Register</button>
+                </form>
+                <div class="auth-link">
+                    Already have an account? <a href="/login" id="show-login">Login</a>
                 </div>
-            `;
-        }
-        
-        messageElement.innerHTML = `
-            ${messageContent}
-            <div class="message-info">
-                <span class="username">${message.username}</span>
-                <span class="timestamp">${timeString}</span>
             </div>
-        `;
-        
-        messagesContainer.appendChild(messageElement);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-    
-    // Send a text message
-    document.getElementById('send-btn').addEventListener('click', function() {
-        sendMessage();
-    });
-    
-    document.getElementById('message-input').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            sendMessage();
-        }
-    });
-    
-    function sendMessage() {
-        const messageInput = document.getElementById('message-input');
-        const message = messageInput.value.trim();
-        
-        if (message && currentConversationId) {
-            socket.emit('send_message', {
-                content: message,
-                conversation_id: currentConversationId
-            });
-            messageInput.value = '';
-        } else if (!currentConversationId) {
-            alert('Please select a conversation first');
-        }
-    }
-    
-    // Audio recording functionality
-    let mediaRecorder;
-    let audioChunks = [];
-    
-    document.getElementById('record-btn').addEventListener('click', function() {
-        if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-            startRecording();
-        } else {
-            stopRecording();
-        }
-    });
-    
-    function startRecording() {
-        if (!currentConversationId) {
-            alert('Please select a conversation first');
-            return;
-        }
-        
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert("Your browser doesn't support audio recording");
-            return;
-        }
-        
-        navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(stream => {
-                audioChunks = [];
-                mediaRecorder = new MediaRecorder(stream);
+        </div>
+    </div>
+
+    <!-- Chat Template -->
+    <div id="chat-template" style="display: none;">
+        <div class="chat-container">
+            <header class="chat-header">
+                <h1>ChatP</h1>
+                <div class="user-info">
+                    <span id="welcome-user">Welcome, User</span>
+                    <a href="/logout" id="logout-btn" class="logout-btn">Logout</a>
+                </div>
+            </header>
+            
+            <div class="chat-layout">
+                <!-- Sidebar for users and conversations -->
+                <div class="sidebar">
+                    <div class="sidebar-section">
+                        <h3>Users</h3>
+                        <ul id="users-list">
+                            <!-- Users will be populated here -->
+                        </ul>
+                    </div>
+                    
+                    <div class="sidebar-section">
+                        <h3>Conversations</h3>
+                        <ul id="conversations-list">
+                            <!-- Conversations will be populated here -->
+                        </ul>
+                    </div>
+                </div>
                 
-                mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
-                };
-                
-                mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    sendAudioMessage(audioBlob);
-                };
-                
-                mediaRecorder.start();
-                document.getElementById('recording-status').style.display = 'inline';
-                document.getElementById('record-btn').textContent = 'Stop Recording';
+                <!-- Main chat area -->
+                <div class="main-chat-area">
+                    <div class="chat-info-bar" id="chat-info-bar">
+                        <span id="current-chat-with">Select a user to start chatting</span>
+                    </div>
+                    
+                    <div class="chat-messages" id="chat-messages">
+                        <!-- Messages will be loaded here -->
+                        <div class="empty-chat">
+                            <p>Select a conversation or start a new one to begin messaging</p>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-container" id="chat-input-container" style="display: none;">
+                        <div class="input-group">
+                            <input type="text" id="message-input" placeholder="Type your message...">
+                            <button id="send-btn">Send</button>
+                        </div>
+                        <div class="audio-controls">
+                            <button id="record-btn">Record Voice Message</button>
+                            <span id="recording-status" style="display: none;">Recording...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let socket;
+        let currentConversationId = null;
+        let currentOtherUserId = null;
+        let currentUsername = '';
+        let currentUserId = null;
+        let mediaRecorder;
+        let audioChunks = [];
+        
+        // DOM elements
+        const loginTemplate = document.getElementById('login-template');
+        const registerTemplate = document.getElementById('register-template');
+        const chatTemplate = document.getElementById('chat-template');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const loginError = document.getElementById('login-error');
+        const registerError = document.getElementById('register-error');
+        const showRegisterBtn = document.getElementById('show-register');
+        const showLoginBtn = document.getElementById('show-login');
+        const logoutBtn = document.getElementById('logout-btn');
+        
+        // Check if user is authenticated
+        checkAuthStatus();
+        
+        function checkAuthStatus() {
+            fetch('/check_auth', {
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.authenticated) {
+                    // User is authenticated, load the chat
+                    currentUserId = data.user_id;
+                    currentUsername = data.username;
+                    loadChatApp();
+                } else {
+                    // User is not authenticated, show login form
+                    showTemplate(loginTemplate);
+                }
             })
             .catch(error => {
-                console.error('Error accessing microphone:', error);
-                alert('Error accessing microphone. Please ensure you have granted permission.');
+                console.error('Auth check error:', error);
+                showTemplate(loginTemplate);
             });
-    }
-    
-    function stopRecording() {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-            mediaRecorder.stream.getTracks().forEach(track => track.stop());
-            
-            document.getElementById('recording-status').style.display = 'none';
-            document.getElementById('record-btn').textContent = 'Record Voice Message';
         }
-    }
-    
-    function sendAudioMessage(audioBlob) {
-        const formData = new FormData();
-        formData.append('audio', audioBlob);
         
-        fetch(`/upload_audio/${currentConversationId}`, {
-            method: 'POST',
-            body: formData,
-            credentials: 'include'
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to upload audio');
+        function loadChatApp() {
+            fetch('/', {
+                credentials: 'include'
+            })
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Extract users and conversations
+                const users = [];
+                const userItems = doc.querySelectorAll('.sidebar-section:first-child .user-item');
+                userItems.forEach(item => {
+                    const username = item.querySelector('.user-name').textContent;
+                    const userId = item.getAttribute('onclick').match(/\d+/)[0];
+                    users.push({ id: parseInt(userId), username });
+                });
+                
+                const conversations = [];
+                const conversationItems = doc.querySelectorAll('.sidebar-section:last-child .conversation-item');
+                conversationItems.forEach(item => {
+                    const username = item.querySelector('.user-name').textContent;
+                    const onclick = item.getAttribute('onclick');
+                    const matches = onclick.match(/(\d+), (\d+), '([^']+)'/);
+                    if (matches) {
+                        conversations.push({
+                            id: parseInt(matches[1]),
+                            other_user_id: parseInt(matches[2]),
+                            other_username: matches[3]
+                        });
+                    }
+                });
+                
+                // Populate UI
+                populateUsersList(users);
+                populateConversationsList(conversations);
+                
+                // Update welcome message
+                document.getElementById('welcome-user').textContent = `Welcome, ${currentUsername}`;
+                
+                // Show chat template
+                showTemplate(chatTemplate);
+                
+                // Initialize Socket.IO connection
+                initializeSocket();
+                
+                // Set up chat event listeners
+                setupChatEvents();
+            })
+            .catch(error => {
+                console.error('Error loading chat app:', error);
+            });
+        }
+        
+        function populateUsersList(users) {
+            const usersList = document.getElementById('users-list');
+            usersList.innerHTML = '';
+            
+            users.forEach(user => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <a href="#" class="user-item">
+                        <span class="user-avatar">${user.username[0].toUpperCase()}</span>
+                        <span class="user-name">${user.username}</span>
+                    </a>
+                `;
+                li.querySelector('.user-item').addEventListener('click', () => {
+                    startConversation(user.id, user.username);
+                });
+                usersList.appendChild(li);
+            });
+        }
+        
+        function populateConversationsList(conversations) {
+            const conversationsList = document.getElementById('conversations-list');
+            conversationsList.innerHTML = '';
+            
+            conversations.forEach(conv => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <a href="#" class="conversation-item">
+                        <span class="user-avatar">${conv.other_username[0].toUpperCase()}</span>
+                        <span class="user-name">${conv.other_username}</span>
+                    </a>
+                `;
+                li.querySelector('.conversation-item').addEventListener('click', () => {
+                    loadConversation(conv.id, conv.other_user_id, conv.other_username);
+                });
+                conversationsList.appendChild(li);
+            });
+        }
+        
+        function initializeSocket() {
+            // Connect to Socket.IO server
+            socket = io({
+                transports: ['websocket', 'polling']
+            });
+            
+            // Socket event handlers
+            socket.on('connect', function() {
+                console.log('Connected to server');
+            });
+            
+            socket.on('new_message', function(data) {
+                if (data.conversation_id === currentConversationId) {
+                    addMessageToChat(data);
+                }
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+            });
+        }
+        
+        function setupChatEvents() {
+            // Send message button
+            document.getElementById('send-btn').addEventListener('click', sendMessage);
+            
+            // Send message on Enter key
+            document.getElementById('message-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+            
+            // Audio recording
+            document.getElementById('record-btn').addEventListener('click', function() {
+                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                    startRecording();
+                } else {
+                    stopRecording();
+                }
+            });
+        }
+        
+        function startConversation(userId, username) {
+            fetch(`/conversation/${userId}`, {
+                method: 'POST',
+                credentials: 'include'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to create conversation');
+                }
+                return response.json();
+            })
+            .then(data => {
+                loadConversation(data.conversation_id, userId, username);
+                
+                // Add to conversations list if not already there
+                const conversations = document.getElementById('conversations-list');
+                const existingConv = Array.from(conversations.querySelectorAll('.user-name')).some(
+                    el => el.textContent === username
+                );
+                
+                if (!existingConv) {
+                    const newConvItem = document.createElement('li');
+                    newConvItem.innerHTML = `
+                        <a href="#" class="conversation-item">
+                            <span class="user-avatar">${username[0].toUpperCase()}</span>
+                            <span class="user-name">${username}</span>
+                        </a>
+                    `;
+                    newConvItem.querySelector('.conversation-item').addEventListener('click', () => {
+                        loadConversation(data.conversation_id, userId, username);
+                    });
+                    conversations.appendChild(newConvItem);
+                }
+            })
+            .catch(error => {
+                console.error('Error starting conversation:', error);
+                alert('Error starting conversation. Please try again.');
+            });
+        }
+        
+        function loadConversation(conversationId, otherUserId, username) {
+            currentConversationId = conversationId;
+            currentOtherUserId = otherUserId;
+            
+            // Update UI
+            document.getElementById('current-chat-with').textContent = `Chat with ${username}`;
+            document.getElementById('chat-input-container').style.display = 'block';
+            
+            // Highlight active conversation
+            document.querySelectorAll('.conversation-item, .user-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Join the conversation room
+            socket.emit('join_conversation', {conversation_id: conversationId});
+            
+            // Load messages with credentials included
+            fetch(`/messages/${conversationId}`, {
+                credentials: 'include'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP ${response.status}: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(messages => {
+                const messagesContainer = document.getElementById('chat-messages');
+                messagesContainer.innerHTML = '';
+                
+                if (messages.length === 0) {
+                    messagesContainer.innerHTML = `
+                        <div class="empty-chat">
+                            <p>No messages yet. Start the conversation!</p>
+                        </div>
+                    `;
+                } else {
+                    messages.forEach(addMessageToChat);
+                }
+                
+                // Scroll to bottom
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            })
+            .catch(error => {
+                console.error('Error loading messages:', error);
+                
+                // Check if it's an authentication error
+                if (error.message.includes('401') || error.message.includes('403')) {
+                    alert('Session expired. Please log in again.');
+                    window.location.href = '/login';
+                } else {
+                    alert('Error loading messages: ' + error.message);
+                }
+            });
+        }
+        
+        function addMessageToChat(message) {
+            const messagesContainer = document.getElementById('chat-messages');
+            
+            // Remove empty chat message if it exists
+            const emptyChat = messagesContainer.querySelector('.empty-chat');
+            if (emptyChat) {
+                emptyChat.remove();
             }
-            return response.json();
-        })
-        .then(data => {
-            if (!data.success) {
-                alert('Error sending audio message');
+            
+            const messageElement = document.createElement('div');
+            const isCurrentUser = message.user_id === currentUserId;
+            messageElement.className = `message ${isCurrentUser ? 'sent' : 'received'}`;
+            
+            const timestamp = new Date(message.timestamp);
+            const timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            let messageContent = '';
+            
+            if (message.type === 'text') {
+                messageContent = `
+                    <div class="message-content">${message.content}</div>
+                `;
+            } else if (message.type === 'audio') {
+                messageContent = `
+                    <div class="message-content audio-message">
+                        <audio controls>
+                            <source src="${message.content}" type="audio/webm">
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+                `;
             }
-        })
-        .catch(error => {
-            console.error('Error sending audio:', error);
-            alert('Error sending audio message. Please try again.');
-        });
-    }
-</script>
-
-<style>
-    .chat-layout {
-        display: flex;
-        height: calc(100vh - 80px);
-    }
-    
-    .sidebar {
-        width: 250px;
-        background-color: #f5f5f5;
-        border-right: 1px solid #ddd;
-        overflow-y: auto;
-        padding: 15px;
-    }
-    
-    .sidebar-section {
-        margin-bottom: 20px;
-    }
-    
-    .sidebar h3 {
-        margin: 0 0 10px 0;
-        font-size: 16px;
-        color: #666;
-    }
-    
-    .sidebar ul {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-    
-    .sidebar li {
-        margin-bottom: 5px;
-    }
-    
-    .user-item, .conversation-item {
-        display: flex;
-        align-items: center;
-        padding: 8px 10px;
-        text-decoration: none;
-        color: #333;
-        border-radius: 5px;
-        transition: background-color 0.2s;
-    }
-    
-    .user-item:hover, .conversation-item:hover,
-    .user-item.active, .conversation-item.active {
-        background-color: #e9ecef;
-    }
-    
-    .user-avatar {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        background-color: #007bff;
-        color: white;
-        border-radius: 50%;
-        margin-right: 10px;
-        font-weight: bold;
-    }
-    
-    .user-name {
-        font-size: 14px;
-    }
-    
-    .main-chat-area {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .chat-info-bar {
-        padding: 10px 15px;
-        background-color: #f8f9fa;
-        border-bottom: 1px solid #dee2e6;
-        font-weight: 500;
-    }
-    
-    .chat-messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 15px;
-        background-color: #fff;
-    }
-    
-    .empty-chat {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100%;
-        color: #6c757d;
-    }
-    
-    .message {
-        margin-bottom: 15px;
-    }
-    
-    .message.sent {
-        text-align: right;
-    }
-    
-    .message.received {
-        text-align: left;
-    }
-    
-    .message-content {
-        display: inline-block;
-        padding: 10px 15px;
-        border-radius: 18px;
-        max-width: 70%;
-        word-wrap: break-word;
-    }
-    
-    .message.sent .message-content {
-        background-color: #007bff;
-        color: white;
-    }
-    
-    .message.received .message-content {
-        background-color: #f1f0f0;
-        color: #333;
-    }
-    
-    .audio-message {
-        margin: 5px 0;
-    }
-    
-    audio {
-        width: 250px;
-        height: 40px;
-    }
-    
-    .message-info {
-        margin-top: 5px;
-        font-size: 12px;
-        color: #777;
-    }
-    
-    .username {
-        font-weight: bold;
-        margin-right: 5px;
-    }
-</style>
-{% endblock %}
+            
+            messageElement.innerHTML = `
+                ${messageContent}
+                <div class="message-info">
+                    <span class="username">${message.username}</span>
+                    <span class="timestamp">${timeString}</span>
+                </div>
+            `;
+            
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function sendMessage() {
+            const messageInput = document.getElementById('message-input');
+            const message = messageInput.value.trim();
+            
+            if (message && currentConversationId) {
+                socket.emit('send_message', {
+                    content: message,
+                    conversation_id: currentConversationId
+                });
+                messageInput.value = '';
+            } else if (!currentConversationId) {
+                alert('Please select a conversation first');
+            }
+        }
+        
+        function startRecording() {
+            if (!currentConversationId) {
+                alert('Please select a conversation first');
+                return;
+            }
+            
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert("Your browser doesn't support audio recording");
+                return;
+            }
+            
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    audioChunks = [];
+                    mediaRecorder = new MediaRecorder(stream);
+                    
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        sendAudioMessage(audioBlob);
+                    };
+                    
+                    mediaRecorder.start();
+                    document.getElementById('recording-status').style.display = 'inline';
+                    document.getElementById('record-btn').textContent = 'Stop Recording';
+                })
+                .catch(error => {
+                    console.error('Error accessing microphone:', error);
+                    alert('Error accessing microphone. Please ensure you have granted permission.');
+                });
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                
+                document.getElementById('recording-status').style.display = 'none';
+                document.getElementById('record-btn').textContent = 'Record Voice Message';
+            }
+        }
+        
+        function sendAudioMessage(audioBlob) {
+            const formData = new FormData();
+            formData.append('audio', audioBlob);
+            
+            fetch(`/upload_audio/${currentConversationId}`, {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to upload audio');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data.success) {
+                    alert('Error sending audio message');
+                }
+            })
+            .catch(error => {
+                console.error('Error sending audio:', error);
+                alert('Error sending audio message. Please try again.');
+            });
+        }
+        
+        function showTemplate(template) {
+            loginTemplate.style.display = 'none';
+            registerTemplate.style.display = 'none';
+            chatTemplate.style.display = 'none';
+            
+            template.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

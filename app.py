@@ -4,9 +4,10 @@ eventlet.monkey_patch()
 
 # Now import other modules
 import os
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from models import db, bcrypt, User, Message, Conversation
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
 from datetime import datetime
 import base64
 from dotenv import load_dotenv
@@ -22,15 +23,49 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'd29c234ca310aa6990092d4b6cd4
 database_url = os.getenv('DATABASE_URL')
 if database_url and database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'postgresql://neondb_owner:npg_OKbEBdk7xT0h@ep-gentle-frog-adxj47j1-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///app.db'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize extensions
+db = SQLAlchemy()
+bcrypt = Bcrypt()
 db.init_app(app)
 bcrypt.init_app(app)
 migrate = Migrate(app, db)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+
+# Models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(120), nullable=False)
+    
+    def set_password(self, password):
+        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+    
+    def check_password(self, password):
+        return bcrypt.check_password_hash(self.password_hash, password)
+
+class Conversation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user1_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user2_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    user1 = db.relationship('User', foreign_keys=[user1_id])
+    user2 = db.relationship('User', foreign_keys=[user2_id])
+    
+    messages = db.relationship('Message', backref='conversation', lazy=True)
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    message_type = db.Column(db.String(20), default='text')  # 'text' or 'audio'
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    conversation_id = db.Column(db.Integer, db.ForeignKey('conversation.id'), nullable=False)
+    
+    user = db.relationship('User', backref=db.backref('messages', lazy=True))
 
 # Create database tables
 with app.app_context():
@@ -78,11 +113,17 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        # Use get() instead of direct access to avoid KeyError
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        if not username or not password:
+            flash('Username and password are required', 'error')
+            return render_template('register.html')
         
         if User.query.filter_by(username=username).first():
-            return render_template('register.html', error='Username already exists')
+            flash('Username already exists', 'error')
+            return render_template('register.html')
         
         user = User(username=username)
         user.set_password(password)
@@ -98,8 +139,13 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        # Use get() instead of direct access to avoid KeyError
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        if not username or not password:
+            flash('Username and password are required', 'error')
+            return render_template('login.html')
         
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
@@ -107,7 +153,8 @@ def login():
             session['username'] = user.username
             return redirect(url_for('index'))
         
-        return render_template('login.html', error='Invalid username or password')
+        flash('Invalid username or password', 'error')
+        return render_template('login.html')
     
     return render_template('login.html')
 
@@ -115,6 +162,8 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+# ... rest of your app.py code remains the same ...
 
 # API routes
 @app.route('/messages/<int:conversation_id>')
@@ -175,7 +224,15 @@ def upload_audio(conversation_id):
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return jsonify({'error': 'Access denied'}), 403
     
-    audio_data = request.files['audio'].read()
+    # Check if audio file exists in request
+    if 'audio' not in request.files:
+        return jsonify({'error': 'No audio file provided'}), 400
+    
+    audio_file = request.files['audio']
+    if audio_file.filename == '':
+        return jsonify({'error': 'No audio file selected'}), 400
+    
+    audio_data = audio_file.read()
     audio_base64 = base64.b64encode(audio_data).decode('utf-8')
     data_url = f"data:audio/webm;base64,{audio_base64}"
     
@@ -215,7 +272,9 @@ def handle_join_conversation(data):
     if 'user_id' not in session:
         return
     
-    conversation_id = data['conversation_id']
+    conversation_id = data.get('conversation_id')
+    if not conversation_id:
+        return
     
     # Check if user is part of this conversation
     conversation = Conversation.query.get(conversation_id)
@@ -228,7 +287,10 @@ def handle_leave_conversation(data):
     if 'user_id' not in session:
         return
     
-    conversation_id = data['conversation_id']
+    conversation_id = data.get('conversation_id')
+    if not conversation_id:
+        return
+    
     leave_room(f'conversation_{conversation_id}')
     emit('left_conversation', {'conversation_id': conversation_id})
 
@@ -237,10 +299,10 @@ def handle_message(data):
     if 'user_id' not in session:
         return
     
-    content = data['content'].strip()
-    conversation_id = data['conversation_id']
+    content = data.get('content', '').strip()
+    conversation_id = data.get('conversation_id')
     
-    if not content:
+    if not content or not conversation_id:
         return
     
     # Check if user is part of this conversation
@@ -268,6 +330,19 @@ def handle_message(data):
         'timestamp': message.timestamp.isoformat(),
         'conversation_id': conversation_id
     }, room=f'conversation_{conversation_id}')
+
+
+@app.route('/check_auth')
+def check_auth():
+    if 'user_id' in session:
+        return jsonify({
+            'authenticated': True,
+            'user_id': session['user_id'],
+            'username': session.get('username', '')
+        })
+    else:
+        return jsonify({'authenticated': False})
+
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
