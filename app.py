@@ -5,8 +5,8 @@ eventlet.monkey_patch()
 # Now import other modules
 import os
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
-from flask_socketio import SocketIO, emit, join_room
-from models import db, bcrypt, User, Message
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from models import db, bcrypt, User, Message, Conversation
 from datetime import datetime
 import base64
 from dotenv import load_dotenv
@@ -22,7 +22,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'd29c234ca310aa6990092d4b6cd4
 database_url = os.getenv('DATABASE_URL')
 if database_url and database_url.startswith('postgres://'):
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://neondb_owner:npg_OKbEBdk7xT0h@ep-gentle-frog-adxj47j1-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'postgresql://neondb_owner:npg_OKbEBdk7xT0h@ep-gentle-frog-adxj47j1-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -36,12 +36,44 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 with app.app_context():
     db.create_all()
 
+# Add CORS headers
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
 # Authentication routes
 @app.route('/')
 def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    return render_template('index.html', username=session.get('username'))
+    
+    # Get all users except current user for conversation list
+    users = User.query.filter(User.id != session['user_id']).all()
+    
+    # Get conversations where current user is involved
+    conversations = Conversation.query.filter(
+        (Conversation.user1_id == session['user_id']) | 
+        (Conversation.user2_id == session['user_id'])
+    ).all()
+    
+    # Prepare conversation data
+    conversation_data = []
+    for conv in conversations:
+        other_user = conv.user1 if conv.user1_id != session['user_id'] else conv.user2
+        conversation_data.append({
+            'id': conv.id,
+            'other_user_id': other_user.id,
+            'other_username': other_user.username
+        })
+    
+    return render_template('index.html', 
+                          username=session.get('username'),
+                          users=users,
+                          conversations=conversation_data)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -85,12 +117,17 @@ def logout():
     return redirect(url_for('login'))
 
 # API routes
-@app.route('/messages')
-def get_messages():
+@app.route('/messages/<int:conversation_id>')
+def get_messages(conversation_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
-    messages = Message.query.order_by(Message.timestamp.asc()).all()
+    # Check if user is part of this conversation
+    conversation = Conversation.query.get(conversation_id)
+    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+        return jsonify({'error': 'Access denied'}), 403
+    
+    messages = Message.query.filter_by(conversation_id=conversation_id).order_by(Message.timestamp.asc()).all()
     message_list = []
     for msg in messages:
         message_list.append({
@@ -98,15 +135,45 @@ def get_messages():
             'content': msg.content,
             'type': msg.message_type,
             'username': msg.user.username,
+            'user_id': msg.user_id,
             'timestamp': msg.timestamp.isoformat()
         })
     
     return jsonify(message_list)
 
-@app.route('/upload_audio', methods=['POST'])
-def upload_audio():
+@app.route('/conversation/<int:other_user_id>', methods=['POST'])
+def create_conversation(other_user_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
+    
+    # Check if conversation already exists
+    conversation = Conversation.query.filter(
+        ((Conversation.user1_id == session['user_id']) & (Conversation.user2_id == other_user_id)) |
+        ((Conversation.user1_id == other_user_id) & (Conversation.user2_id == session['user_id']))
+    ).first()
+    
+    if conversation:
+        return jsonify({'conversation_id': conversation.id})
+    
+    # Create new conversation
+    new_conversation = Conversation(
+        user1_id=session['user_id'],
+        user2_id=other_user_id
+    )
+    db.session.add(new_conversation)
+    db.session.commit()
+    
+    return jsonify({'conversation_id': new_conversation.id})
+
+@app.route('/upload_audio/<int:conversation_id>', methods=['POST'])
+def upload_audio(conversation_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    # Check if user is part of this conversation
+    conversation = Conversation.query.get(conversation_id)
+    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+        return jsonify({'error': 'Access denied'}), 403
     
     audio_data = request.files['audio'].read()
     audio_base64 = base64.b64encode(audio_data).decode('utf-8')
@@ -116,19 +183,22 @@ def upload_audio():
     message = Message(
         content=data_url,
         message_type='audio',
-        user_id=session['user_id']
+        user_id=session['user_id'],
+        conversation_id=conversation_id
     )
     db.session.add(message)
     db.session.commit()
     
-    # Broadcast to all clients
+    # Broadcast to conversation room
     socketio.emit('new_message', {
         'id': message.id,
         'content': data_url,
         'type': 'audio',
         'username': session['username'],
-        'timestamp': message.timestamp.isoformat()
-    })
+        'user_id': session['user_id'],
+        'timestamp': message.timestamp.isoformat(),
+        'conversation_id': conversation_id
+    }, room=f'conversation_{conversation_id}')
     
     return jsonify({'success': True})
 
@@ -136,8 +206,31 @@ def upload_audio():
 @socketio.on('connect')
 def handle_connect():
     if 'user_id' in session:
-        join_room('main')
-        emit('user_joined', {'username': session['username']}, room='main')
+        # Join user's personal room for notifications
+        join_room(f'user_{session["user_id"]}')
+        emit('connected', {'status': 'connected'})
+
+@socketio.on('join_conversation')
+def handle_join_conversation(data):
+    if 'user_id' not in session:
+        return
+    
+    conversation_id = data['conversation_id']
+    
+    # Check if user is part of this conversation
+    conversation = Conversation.query.get(conversation_id)
+    if conversation and (conversation.user1_id == session['user_id'] or conversation.user2_id == session['user_id']):
+        join_room(f'conversation_{conversation_id}')
+        emit('joined_conversation', {'conversation_id': conversation_id})
+
+@socketio.on('leave_conversation')
+def handle_leave_conversation(data):
+    if 'user_id' not in session:
+        return
+    
+    conversation_id = data['conversation_id']
+    leave_room(f'conversation_{conversation_id}')
+    emit('left_conversation', {'conversation_id': conversation_id})
 
 @socketio.on('send_message')
 def handle_message(data):
@@ -145,26 +238,36 @@ def handle_message(data):
         return
     
     content = data['content'].strip()
+    conversation_id = data['conversation_id']
+    
     if not content:
+        return
+    
+    # Check if user is part of this conversation
+    conversation = Conversation.query.get(conversation_id)
+    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
     
     # Save to database
     message = Message(
         content=content,
         message_type='text',
-        user_id=session['user_id']
+        user_id=session['user_id'],
+        conversation_id=conversation_id
     )
     db.session.add(message)
     db.session.commit()
     
-    # Broadcast to all clients
+    # Broadcast to conversation room
     emit('new_message', {
         'id': message.id,
         'content': content,
         'type': 'text',
         'username': session['username'],
-        'timestamp': message.timestamp.isoformat()
-    }, room='main')
+        'user_id': session['user_id'],
+        'timestamp': message.timestamp.isoformat(),
+        'conversation_id': conversation_id
+    }, room=f'conversation_{conversation_id}')
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)

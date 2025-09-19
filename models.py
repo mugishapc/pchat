@@ -9,24 +9,29 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(120), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
     
     def check_password(self, password):
         return bcrypt.check_password_hash(self.password_hash, password)
+
+class Conversation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user1_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user2_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     
-    def __repr__(self):
-        return f'<User {self.username}>'
+    user1 = db.relationship('User', foreign_keys=[user1_id])
+    user2 = db.relationship('User', foreign_keys=[user2_id])
+    
+    messages = db.relationship('Message', backref='conversation', lazy=True)
 
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
-    message_type = db.Column(db.String(10), default='text')  # 'text' or 'audio'
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    message_type = db.Column(db.String(20), default='text')  # 'text' or 'audio'
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref=db.backref('messages', lazy=True))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    conversation_id = db.Column(db.Integer, db.ForeignKey('conversation.id'), nullable=False)
     
-    def __repr__(self):
-        return f'<Message {self.content[:20]}>'
+    user = db.relationship('User', backref=db.backref('messages', lazy=True))
