@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="chat-container">
+    <header class="chat-header">
+        <h1>ChatP</h1>
+        <div class="user-info">
+            <span>Welcome, {{ username }}</span>
+            <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+        </div>
+    </header>
+    
+    <div class="chat-messages" id="chat-messages">
+        <!-- Messages will be loaded here -->
+    </div>
+    
+    <div class="chat-input-container">
+        <div class="input-group">
+            <input type="text" id="message-input" placeholder="Type your message...">
+            <button id="send-btn">Send</button>
+        </div>
+        <div class="audio-controls">
+            <button id="record-btn">Record Voice Message</button>
+            <span id="recording-status" style="display: none;">Recording...</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='audio-recorder.js') }}"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+{% endblock %}
