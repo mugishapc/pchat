@@ -3,11 +3,15 @@
 {% block content %}
 <div class="auth-container">
     <div class="auth-form">
-        <h1>ChatP Registration</h1>
-        {% if error %}
-        <div class="error-message">{{ error }}</div>
-        {% endif %}
-        <form method="POST">
+        <h2>Create an Account</h2>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="error">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form method="POST" action="/register">
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" required>
@@ -16,9 +20,11 @@
                 <label for="password">Password</label>
                 <input type="password" id="password" name="password" required>
             </div>
-            <button type="submit">Register</button>
+            <button type="submit" class="btn">Register</button>
         </form>
-        <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+        <div class="auth-link">
+            Already have an account? <a href="{{ url_for('login') }}">Login</a>
+        </div>
     </div>
 </div>
 {% endblock %}

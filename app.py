@@ -163,8 +163,6 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# ... rest of your app.py code remains the same ...
-
 # API routes
 @app.route('/messages/<int:conversation_id>')
 def get_messages(conversation_id):
@@ -172,7 +170,7 @@ def get_messages(conversation_id):
         return jsonify({'error': 'Not authenticated'}), 401
     
     # Check if user is part of this conversation
-    conversation = Conversation.query.get(conversation_id)
+    conversation = db.session.get(Conversation, conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return jsonify({'error': 'Access denied'}), 403
     
@@ -220,7 +218,7 @@ def upload_audio(conversation_id):
         return jsonify({'error': 'Not authenticated'}), 401
     
     # Check if user is part of this conversation
-    conversation = Conversation.query.get(conversation_id)
+    conversation = db.session.get(Conversation, conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return jsonify({'error': 'Access denied'}), 403
     
@@ -277,7 +275,7 @@ def handle_join_conversation(data):
         return
     
     # Check if user is part of this conversation
-    conversation = Conversation.query.get(conversation_id)
+    conversation = db.session.get(Conversation, conversation_id)
     if conversation and (conversation.user1_id == session['user_id'] or conversation.user2_id == session['user_id']):
         join_room(f'conversation_{conversation_id}')
         emit('joined_conversation', {'conversation_id': conversation_id})
@@ -306,7 +304,7 @@ def handle_message(data):
         return
     
     # Check if user is part of this conversation
-    conversation = Conversation.query.get(conversation_id)
+    conversation = db.session.get(Conversation, conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
     
