@@ -5,7 +5,7 @@
     <div id="chat-template">
         <div class="chat-container">
             <header class="chat-header">
-                <h1>MugiChat-By Celestin</h1>
+                <h1>MugiChat-App</h1>
                 <div class="user-info">
                     <span id="welcome-user">Welcome, {{ username }}</span>
                     <a href="{{ url_for('logout') }}" id="logout-btn" class="logout-btn">Logout</a>
@@ -72,6 +72,9 @@
             </div>
         </div>
     </div>
+    
+    <!-- Hidden field for VAPID public key -->
+    <input type="hidden" id="vapid-public-key" value="{{ vapid_public_key }}">
 {% endblock %}
 
 {% block scripts %}
@@ -85,10 +88,12 @@
         let currentUserId = null;
         let mediaRecorder;
         let audioChunks = [];
+        let pushSubscription = null;
         
         // DOM elements
         const logoutBtn = document.getElementById('logout-btn');
         const deleteAccountBtn = document.getElementById('delete-account-btn');
+        const vapidPublicKey = document.getElementById('vapid-public-key').value;
         
         // Check if user is already logged in
         document.addEventListener('DOMContentLoaded', function() {
@@ -161,6 +166,9 @@
             
             // Listen for online/offline status
             setupNetworkStatusListener();
+            
+            // Initialize push notifications
+            initializePushNotifications();
         });
         
         // Set visual viewport height for mobile devices
@@ -187,6 +195,84 @@
                         console.log('ServiceWorker registration failed: ', error);
                     });
             }
+        }
+        
+        // Initialize push notifications
+        function initializePushNotifications() {
+            if ('serviceWorker' in navigator && 'PushManager' in window) {
+                navigator.serviceWorker.ready.then(function(registration) {
+                    registration.pushManager.getSubscription()
+                        .then(function(subscription) {
+                            if (subscription) {
+                                pushSubscription = subscription;
+                                savePushSubscription(subscription);
+                            } else {
+                                subscribeUser(registration);
+                            }
+                        })
+                        .catch(function(error) {
+                            console.log('Error getting push subscription:', error);
+                        });
+                });
+            }
+        }
+        
+        // Subscribe user to push notifications
+        function subscribeUser(registration) {
+            const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+            
+            registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: applicationServerKey
+            })
+            .then(function(subscription) {
+                pushSubscription = subscription;
+                savePushSubscription(subscription);
+            })
+            .catch(function(error) {
+                console.log('Failed to subscribe the user:', error);
+            });
+        }
+        
+        // Save push subscription to server
+        function savePushSubscription(subscription) {
+            fetch('/save_subscription', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    subscription: subscription
+                }),
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Push subscription saved successfully');
+                } else {
+                    console.error('Failed to save push subscription');
+                }
+            })
+            .catch(error => {
+                console.error('Error saving push subscription:', error);
+            });
+        }
+        
+        // Convert base64 string to Uint8Array
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+                .replace(/\-/g, '+')
+                .replace(/_/g, '/');
+            
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
         }
         
         // Set up network status listener

@@ -4,7 +4,9 @@ const urlsToCache = [
   '/offline',
   '/static/style.css',
   '/static/script.js',
-  '/static/audio-recorder.js'
+  '/static/audio-recorder.js',
+  '/static/icons/icon-72x72.png',
+  '/static/icons/icon-192x192.png'
 ];
 
 // Install event
@@ -72,6 +74,46 @@ self.addEventListener('sync', event => {
   if (event.tag === 'send-message') {
     event.waitUntil(sendPendingMessages());
   }
+});
+
+// Push notification event
+self.addEventListener('push', function(event) {
+  if (event.data) {
+    const payload = event.data.json();
+    
+    const options = {
+      body: payload.body,
+      icon: payload.icon || '/static/icons/icon-192x192.png',
+      badge: payload.badge || '/static/icons/icon-72x72.png',
+      data: payload.data || {}
+    };
+    
+    event.waitUntil(
+      self.registration.showNotification(payload.title, options)
+    );
+  }
+});
+
+// Notification click event
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  
+  const conversationId = event.notification.data.conversation_id;
+  
+  event.waitUntil(
+    clients.openWindow(event.notification.data.url || '/')
+      .then(windowClient => {
+        // Focus on the window and navigate to the conversation
+        if (windowClient) {
+          windowClient.focus();
+          // You could also send a message to the client to open the specific conversation
+          windowClient.postMessage({
+            type: 'OPEN_CONVERSATION',
+            conversationId: conversationId
+          });
+        }
+      })
+  );
 });
 
 // Example function for background sync (you'll need to implement based on your app)

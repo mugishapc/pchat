@@ -12,6 +12,8 @@ from datetime import datetime
 import base64
 from dotenv import load_dotenv
 from flask_migrate import Migrate
+import json
+from pywebpush import webpush, WebPushException
 
 # Load environment variables from .env file
 load_dotenv()
@@ -27,6 +29,13 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///app.db'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# VAPID keys for web push notifications
+VAPID_PRIVATE_KEY = os.getenv('LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ1RvQXV1N0pLTnZWSTJLWTAKaHdaOFg5S21PL0tlUXNWdFN3NExZSm5TRE9DaFJBTkNBQVFUVWJaQWY3OHlSYnRIN1VJbWNmamRhV21qVDMzVQpxbnBXWGt2ck5tRndyZ1JSRnFBOUJmd0ZUZ2xuSjQzV1J4emFJc0ZnZkdlWUluQzVpY2ZEM3FuNwotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tCg==')
+VAPID_PUBLIC_KEY = os.getenv('BBNRtkB_vzJFu0ftQiZx-N1paaNPfdSqelZeS-s2YXCuBFEWoD0F_AVOCWcnjdZHHNoiwWB8Z5gicLmJx8Peqfs=')
+VAPID_CLAIMS = {
+    "sub": "mailto:mpc0679@gmail.com"
+}
+
 # Initialize extensions
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -40,6 +49,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(120), nullable=False)
+    push_subscription = db.Column(db.Text, nullable=True)
     
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
@@ -108,7 +118,8 @@ def index():
     return render_template('index.html', 
                           username=session.get('username'),
                           users=users,
-                          conversations=conversation_data)
+                          conversations=conversation_data,
+                          vapid_public_key=VAPID_PUBLIC_KEY)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -244,6 +255,9 @@ def upload_audio(conversation_id):
     db.session.add(message)
     db.session.commit()
     
+    # Get the other user in the conversation
+    other_user = conversation.user1 if conversation.user1_id != session['user_id'] else conversation.user2
+    
     # Broadcast to conversation room
     socketio.emit('new_message', {
         'id': message.id,
@@ -255,7 +269,68 @@ def upload_audio(conversation_id):
         'conversation_id': conversation_id
     }, room=f'conversation_{conversation_id}')
     
+    # Send push notification to the other user
+    if other_user.push_subscription:
+        try:
+            send_push_notification(
+                other_user.push_subscription,
+                f"New voice message from {session['username']}",
+                "You received a new voice message",
+                conversation_id
+            )
+        except Exception as e:
+            print(f"Failed to send push notification: {e}")
+    
     return jsonify({'success': True})
+
+# Save push subscription
+@app.route('/save_subscription', methods=['POST'])
+def save_subscription():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    subscription = request.json.get('subscription')
+    if not subscription:
+        return jsonify({'error': 'No subscription provided'}), 400
+    
+    user = db.session.get(User, session['user_id'])
+    if user:
+        user.push_subscription = json.dumps(subscription)
+        db.session.commit()
+        return jsonify({'success': True})
+    
+    return jsonify({'error': 'User not found'}), 404
+
+# Send push notification function
+def send_push_notification(subscription_json, title, body, conversation_id):
+    if not subscription_json:
+        return
+    
+    try:
+        subscription = json.loads(subscription_json)
+        payload = {
+            'title': title,
+            'body': body,
+            'icon': '/static/icons/icon-192x192.png',
+            'badge': '/static/icons/icon-72x72.png',
+            'data': {
+                'conversation_id': conversation_id,
+                'url': '/'
+            }
+        }
+        
+        webpush(
+            subscription_info=subscription,
+            data=json.dumps(payload),
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims=VAPID_CLAIMS
+        )
+    except WebPushException as e:
+        print(f"Web push failed: {e}")
+        if e.response and e.response.json():
+            print(f"Response: {e.response.json()}")
+    except Exception as e:
+        print(f"Error sending push notification: {e}")
 
 # SocketIO events
 @socketio.on('connect')
@@ -308,6 +383,9 @@ def handle_message(data):
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
     
+    # Get the other user in the conversation
+    other_user = conversation.user1 if conversation.user1_id != session['user_id'] else conversation.user2
+    
     # Save to database
     message = Message(
         content=content,
@@ -328,7 +406,18 @@ def handle_message(data):
         'timestamp': message.timestamp.isoformat(),
         'conversation_id': conversation_id
     }, room=f'conversation_{conversation_id}')
-
+    
+    # Send push notification to the other user
+    if other_user.push_subscription:
+        try:
+            send_push_notification(
+                other_user.push_subscription,
+                f"New message from {session['username']}",
+                content,
+                conversation_id
+            )
+        except Exception as e:
+            print(f"Failed to send push notification: {e}")
 
 @app.route('/check_auth')
 def check_auth():
@@ -340,8 +429,6 @@ def check_auth():
         })
     else:
         return jsonify({'authenticated': False})
-
-
 
 @app.route('/delete_account', methods=['POST'])
 def delete_account():
@@ -378,7 +465,6 @@ def delete_account():
     
     return jsonify({'success': True, 'message': 'Account deleted successfully'})
 
-
 # Serve service worker with correct MIME type
 @app.route('/sw.js')
 def serve_sw():
@@ -393,7 +479,6 @@ def serve_manifest():
 @app.route('/offline')
 def offline():
     return render_template('offline.html')
-
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
