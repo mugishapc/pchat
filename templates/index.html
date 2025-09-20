@@ -9,6 +9,7 @@
                 <div class="user-info">
                     <span id="welcome-user">Welcome, {{ username }}</span>
                     <a href="{{ url_for('logout') }}" id="logout-btn" class="logout-btn">Logout</a>
+                    <button id="delete-account-btn" class="delete-btn">Delete Account</button>
                 </div>
             </header>
             
@@ -87,9 +88,13 @@
         
         // DOM elements
         const logoutBtn = document.getElementById('logout-btn');
+        const deleteAccountBtn = document.getElementById('delete-account-btn');
         
         // Check if user is already logged in
         document.addEventListener('DOMContentLoaded', function() {
+            // Set visual viewport height for mobile devices
+            setVisualViewportHeight();
+            
             checkAuthStatus();
             
             // Set up chat event listeners
@@ -127,7 +132,107 @@
                     window.location.href = '/login';
                 });
             });
+            
+            // Delete account button
+            deleteAccountBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to delete your account? This will permanently delete all your messages and cannot be undone.')) {
+                    fetch('/delete_account', {
+                        method: 'POST',
+                        credentials: 'include'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Account deleted successfully');
+                            window.location.href = '/login';
+                        } else {
+                            alert('Error deleting account: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error deleting account:', error);
+                        alert('Error deleting account. Please try again.');
+                    });
+                }
+            });
+            
+            // Initialize service worker for PWA
+            initializeServiceWorker();
+            
+            // Listen for online/offline status
+            setupNetworkStatusListener();
         });
+        
+        // Set visual viewport height for mobile devices
+        function setVisualViewportHeight() {
+            if (window.visualViewport) {
+                const setVH = () => {
+                    document.documentElement.style.setProperty('--vh', `${visualViewport.height * 0.01}px`);
+                };
+                
+                setVH();
+                window.visualViewport.addEventListener('resize', setVH);
+                window.addEventListener('orientationchange', setVH);
+            }
+        }
+        
+        // Initialize service worker for PWA functionality
+        function initializeServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('{{ url_for("static", filename="service-worker.js") }}')
+                    .then(function(registration) {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(function(error) {
+                        console.log('ServiceWorker registration failed: ', error);
+                    });
+            }
+        }
+        
+        // Set up network status listener
+        function setupNetworkStatusListener() {
+            window.addEventListener('online', function() {
+                showStatus('Back online', 'success');
+                // Try to resend any pending messages if needed
+            });
+            
+            window.addEventListener('offline', function() {
+                showStatus('You are offline', 'error');
+            });
+            
+            // Initial check
+            if (!navigator.onLine) {
+                showStatus('You are offline', 'error');
+            }
+        }
+        
+        // Show network status message
+        function showStatus(message, type) {
+            // Create or show a status notification
+            let statusEl = document.getElementById('network-status');
+            if (!statusEl) {
+                statusEl = document.createElement('div');
+                statusEl.id = 'network-status';
+                statusEl.style.position = 'fixed';
+                statusEl.style.top = '10px';
+                statusEl.style.left = '50%';
+                statusEl.style.transform = 'translateX(-50%)';
+                statusEl.style.padding = '10px 20px';
+                statusEl.style.borderRadius = '5px';
+                statusEl.style.zIndex = '1000';
+                statusEl.style.fontWeight = 'bold';
+                document.body.appendChild(statusEl);
+            }
+            
+            statusEl.textContent = message;
+            statusEl.style.backgroundColor = type === 'success' ? '#4caf50' : '#f44336';
+            statusEl.style.color = 'white';
+            statusEl.style.display = 'block';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 3000);
+        }
         
         function checkAuthStatus() {
             fetch('/check_auth', {
@@ -189,6 +294,34 @@
                 } else {
                     stopRecording();
                 }
+            });
+            
+            // Better touch handling for mobile
+            improveMobileTouchHandling();
+        }
+        
+        // Improve touch handling for mobile devices
+        function improveMobileTouchHandling() {
+            // Prevent zoom on double-tap
+            let lastTouchEnd = 0;
+            document.addEventListener('touchend', function(event) {
+                const now = (new Date()).getTime();
+                if (now - lastTouchEnd <= 300) {
+                    event.preventDefault();
+                }
+                lastTouchEnd = now;
+            }, false);
+            
+            // Better button touch feedback
+            const buttons = document.querySelectorAll('button, a');
+            buttons.forEach(button => {
+                button.addEventListener('touchstart', function() {
+                    this.classList.add('touch-active');
+                });
+                
+                button.addEventListener('touchend', function() {
+                    this.classList.remove('touch-active');
+                });
             });
         }
         

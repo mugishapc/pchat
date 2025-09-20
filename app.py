@@ -342,5 +342,58 @@ def check_auth():
         return jsonify({'authenticated': False})
 
 
+
+@app.route('/delete_account', methods=['POST'])
+def delete_account():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    user_id = session['user_id']
+    user = db.session.get(User, user_id)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    # Delete all messages sent by the user
+    Message.query.filter_by(user_id=user_id).delete()
+    
+    # Delete conversations where user is involved
+    conversations = Conversation.query.filter(
+        (Conversation.user1_id == user_id) | 
+        (Conversation.user2_id == user_id)
+    ).all()
+    
+    for conv in conversations:
+        # Delete all messages in these conversations
+        Message.query.filter_by(conversation_id=conv.id).delete()
+        # Delete the conversation itself
+        db.session.delete(conv)
+    
+    # Finally delete the user
+    db.session.delete(user)
+    db.session.commit()
+    
+    # Clear session
+    session.clear()
+    
+    return jsonify({'success': True, 'message': 'Account deleted successfully'})
+
+
+# Serve service worker with correct MIME type
+@app.route('/sw.js')
+def serve_sw():
+    return app.send_static_file('service-worker.js'), 200, {'Content-Type': 'application/javascript'}
+
+# Serve manifest with correct MIME type
+@app.route('/manifest.json')
+def serve_manifest():
+    return app.send_static_file('manifest.json'), 200, {'Content-Type': 'application/json'}
+
+# Serve offline page
+@app.route('/offline')
+def offline():
+    return render_template('offline.html')
+
+
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
