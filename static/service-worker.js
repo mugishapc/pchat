@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mugichat-v1';
+const CACHE_NAME = 'mugichat-v2';
 const urlsToCache = [
   '/',
   '/offline',
@@ -24,7 +24,8 @@ self.addEventListener('fetch', event => {
   // Handle API requests differently
   if (event.request.url.includes('/api/') || 
       event.request.url.includes('/messages/') ||
-      event.request.url.includes('/conversation/')) {
+      event.request.url.includes('/conversation/') ||
+      event.request.url.includes('/users/status')) {
     // For API calls, try network first, then fail
     event.respondWith(
       fetch(event.request)
@@ -85,7 +86,8 @@ self.addEventListener('push', function(event) {
       body: payload.body,
       icon: payload.icon || '/static/icons/icon-192x192.png',
       badge: payload.badge || '/static/icons/icon-72x72.png',
-      data: payload.data || {}
+      data: payload.data || {},
+      vibrate: [200, 100, 200]
     };
     
     event.waitUntil(
@@ -106,7 +108,7 @@ self.addEventListener('notificationclick', function(event) {
         // Focus on the window and navigate to the conversation
         if (windowClient) {
           windowClient.focus();
-          // You could also send a message to the client to open the specific conversation
+          // Send a message to the client to open the specific conversation
           windowClient.postMessage({
             type: 'OPEN_CONVERSATION',
             conversationId: conversationId
@@ -114,6 +116,13 @@ self.addEventListener('notificationclick', function(event) {
         }
       })
   );
+});
+
+// Handle messages from the main app
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Example function for background sync (you'll need to implement based on your app)

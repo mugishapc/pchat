@@ -1,8 +1,19 @@
 {% extends "base.html" %}
 
 {% block content %}
+    <!-- App Launching Animation -->
+    <div id="app-launch" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #667eea; display: flex; justify-content: center; align-items: center; z-index: 9999;">
+        <div style="text-align: center; color: white;">
+            <div style="width: 80px; height: 80px; background: white; border-radius: 50%; margin: 0 auto 20px; display: flex; justify-content: center; align-items: center;">
+                <span style="font-size: 40px; color: #667eea; font-weight: bold;">M</span>
+            </div>
+            <h1 style="margin-bottom: 10px;">MugiChat</h1>
+            <p>Loading...</p>
+        </div>
+    </div>
+
     <!-- Chat Template -->
-    <div id="chat-template">
+    <div id="chat-template" style="display: none;">
         <div class="chat-container">
             <header class="chat-header">
                 <h1>MugiChat-App</h1>
@@ -24,6 +35,7 @@
                                 <a href="#" class="user-item">
                                     <span class="user-avatar">{{ user.username[0].upper() }}</span>
                                     <span class="user-name">{{ user.username }}</span>
+                                    <span class="user-status" data-user-id="{{ user.id }}"></span>
                                 </a>
                             </li>
                             {% endfor %}
@@ -37,7 +49,16 @@
                             <li data-conversation-id="{{ conversation.id }}" data-other-user-id="{{ conversation.other_user_id }}">
                                 <a href="#" class="conversation-item">
                                     <span class="user-avatar">{{ conversation.other_username[0].upper() }}</span>
-                                    <span class="user-name">{{ conversation.other_username }}</span>
+                                    <div class="conversation-info">
+                                        <span class="user-name">{{ conversation.other_username }}</span>
+                                        <span class="last-message">{{ conversation.last_message|truncate(20) if conversation.last_message else 'No messages yet' }}</span>
+                                    </div>
+                                    <div class="conversation-meta">
+                                        <span class="last-message-time">{{ conversation.last_message_time|format_time if conversation.last_message_time else '' }}</span>
+                                        {% if conversation.unread_count > 0 %}
+                                        <span class="unread-badge">{{ conversation.unread_count }}</span>
+                                        {% endif %}
+                                    </div>
                                 </a>
                             </li>
                             {% endfor %}
@@ -49,6 +70,7 @@
                 <div class="main-chat-area">
                     <div class="chat-info-bar" id="chat-info-bar">
                         <span id="current-chat-with">Select a user to start chatting</span>
+                        <span id="current-chat-status"></span>
                     </div>
                     
                     <div class="chat-messages" id="chat-messages">
@@ -89,86 +111,30 @@
         let mediaRecorder;
         let audioChunks = [];
         let pushSubscription = null;
+        let userStatuses = {};
         
         // DOM elements
         const logoutBtn = document.getElementById('logout-btn');
         const deleteAccountBtn = document.getElementById('delete-account-btn');
         const vapidPublicKey = document.getElementById('vapid-public-key').value;
+        const appLaunch = document.getElementById('app-launch');
+        const chatTemplate = document.getElementById('chat-template');
         
         // Check if user is already logged in
         document.addEventListener('DOMContentLoaded', function() {
-            // Set visual viewport height for mobile devices
-            setVisualViewportHeight();
-            
-            checkAuthStatus();
-            
-            // Set up chat event listeners
-            setupChatEvents();
-            
-            // Set up user and conversation click events
-            document.querySelectorAll('.user-item').forEach(item => {
-                item.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const userId = this.closest('li').getAttribute('data-user-id');
-                    const username = this.querySelector('.user-name').textContent;
-                    startConversation(userId, username);
-                });
-            });
-            
-            document.querySelectorAll('.conversation-item').forEach(item => {
-                item.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const conversationId = this.closest('li').getAttribute('data-conversation-id');
-                    const otherUserId = this.closest('li').getAttribute('data-other-user-id');
-                    const username = this.querySelector('.user-name').textContent;
-                    loadConversation(conversationId, otherUserId, username);
-                });
-            });
-            
-            // Logout button
-            logoutBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                fetch('/logout', {
-                    method: 'GET',
-                    credentials: 'include'
-                })
-                .then(() => {
-                    if (socket) socket.disconnect();
-                    window.location.href = '/login';
-                });
-            });
-            
-            // Delete account button
-            deleteAccountBtn.addEventListener('click', function() {
-                if (confirm('Are you sure you want to delete your account? This will permanently delete all your messages and cannot be undone.')) {
-                    fetch('/delete_account', {
-                        method: 'POST',
-                        credentials: 'include'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('Account deleted successfully');
-                            window.location.href = '/login';
-                        } else {
-                            alert('Error deleting account: ' + data.error);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error deleting account:', error);
-                        alert('Error deleting account. Please try again.');
-                    });
-                }
-            });
-            
-            // Initialize service worker for PWA
-            initializeServiceWorker();
-            
-            // Listen for online/offline status
-            setupNetworkStatusListener();
-            
-            // Initialize push notifications
-            initializePushNotifications();
+            // Show app launching animation
+            setTimeout(() => {
+                appLaunch.style.opacity = '0';
+                setTimeout(() => {
+                    appLaunch.style.display = 'none';
+                    chatTemplate.style.display = 'block';
+                    
+                    // Set visual viewport height for mobile devices
+                    setVisualViewportHeight();
+                    
+                    checkAuthStatus();
+                }, 500);
+            }, 2000);
         });
         
         // Set visual viewport height for mobile devices
@@ -330,6 +296,25 @@
                     currentUserId = data.user_id;
                     currentUsername = data.username;
                     initializeSocket();
+                    loadUserStatuses();
+                    
+                    // Set up chat event listeners
+                    setupChatEvents();
+                    
+                    // Set up user and conversation click events
+                    setupUserAndConversationEvents();
+                    
+                    // Set up logout and delete account buttons
+                    setupButtonEvents();
+                    
+                    // Initialize service worker for PWA
+                    initializeServiceWorker();
+                    
+                    // Listen for online/offline status
+                    setupNetworkStatusListener();
+                    
+                    // Initialize push notifications
+                    initializePushNotifications();
                 } else {
                     window.location.href = '/login';
                 }
@@ -338,6 +323,53 @@
                 console.error('Auth check error:', error);
                 window.location.href = '/login';
             });
+        }
+        
+        function loadUserStatuses() {
+            fetch('/users/status', {
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                userStatuses = data;
+                updateAllUserStatusIndicators();
+            })
+            .catch(error => {
+                console.error('Error loading user statuses:', error);
+            });
+        }
+        
+        function updateAllUserStatusIndicators() {
+            // Update status for all users in the list
+            document.querySelectorAll('.user-item').forEach(item => {
+                const userId = item.closest('li').getAttribute('data-user-id');
+                updateUserStatusIndicator(userId);
+            });
+            
+            // Update status for current chat if applicable
+            if (currentOtherUserId) {
+                updateChatStatusIndicator(currentOtherUserId);
+            }
+        }
+        
+        function updateUserStatusIndicator(userId) {
+            const statusElement = document.querySelector(`.user-status[data-user-id="${userId}"]`);
+            if (statusElement && userStatuses[userId]) {
+                const status = userStatuses[userId].status;
+                statusElement.className = `user-status ${status}`;
+                statusElement.title = status === 'online' ? 'Online' : 
+                                    status === 'recently online' ? 'Recently online' : 'Offline';
+            }
+        }
+        
+        function updateChatStatusIndicator(userId) {
+            const statusElement = document.getElementById('current-chat-status');
+            if (statusElement && userStatuses[userId]) {
+                const status = userStatuses[userId].status;
+                statusElement.textContent = status === 'online' ? 'online' : 
+                                          status === 'recently online' ? 'recently online' : 'offline';
+                statusElement.className = `chat-status ${status}`;
+            }
         }
         
         function initializeSocket() {
@@ -349,12 +381,37 @@
             // Socket event handlers
             socket.on('connect', function() {
                 console.log('Connected to server');
+                
+                // Send periodic activity pings to stay online
+                setInterval(() => {
+                    socket.emit('user_activity');
+                }, 15000);
             });
             
             socket.on('new_message', function(data) {
                 if (data.conversation_id === currentConversationId) {
                     addMessageToChat(data);
                 }
+                
+                // Update conversation list with new message
+                updateConversationInList(data.conversation_id, data.content, data.timestamp, true);
+            });
+            
+            socket.on('user_status', function(data) {
+                // Update user status
+                if (userStatuses[data.user_id]) {
+                    userStatuses[data.user_id].status = data.status;
+                    updateUserStatusIndicator(data.user_id);
+                    
+                    // If this is the current chat user, update their status
+                    if (currentOtherUserId == data.user_id) {
+                        updateChatStatusIndicator(data.user_id);
+                    }
+                }
+            });
+            
+            socket.on('update_conversation', function(data) {
+                updateConversationInList(data.conversation_id, data.last_message, data.last_message_time, data.unread_count);
             });
             
             socket.on('disconnect', function() {
@@ -384,6 +441,65 @@
             
             // Better touch handling for mobile
             improveMobileTouchHandling();
+        }
+        
+        function setupUserAndConversationEvents() {
+            document.querySelectorAll('.user-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const userId = this.closest('li').getAttribute('data-user-id');
+                    const username = this.querySelector('.user-name').textContent;
+                    startConversation(userId, username);
+                });
+            });
+            
+            document.querySelectorAll('.conversation-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const conversationId = this.closest('li').getAttribute('data-conversation-id');
+                    const otherUserId = this.closest('li').getAttribute('data-other-user-id');
+                    const username = this.querySelector('.user-name').textContent;
+                    loadConversation(conversationId, otherUserId, username);
+                });
+            });
+        }
+        
+        function setupButtonEvents() {
+            // Logout button
+            logoutBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                fetch('/logout', {
+                    method: 'GET',
+                    credentials: 'include'
+                })
+                .then(() => {
+                    if (socket) socket.disconnect();
+                    window.location.href = '/login';
+                });
+            });
+            
+            // Delete account button
+            deleteAccountBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to delete your account? This will permanently delete all your messages and cannot be undone.')) {
+                    fetch('/delete_account', {
+                        method: 'POST',
+                        credentials: 'include'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Account deleted successfully');
+                            window.location.href = '/login';
+                        } else {
+                            alert('Error deleting account: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error deleting account:', error);
+                        alert('Error deleting account. Please try again.');
+                    });
+                }
+            });
         }
         
         // Improve touch handling for mobile devices
@@ -435,7 +551,14 @@
                     newConvItem.innerHTML = `
                         <a href="#" class="conversation-item">
                             <span class="user-avatar">${username[0].toUpperCase()}</span>
-                            <span class="user-name">${username}</span>
+                            <div class="conversation-info">
+                                <span class="user-name">${username}</span>
+                                <span class="last-message">No messages yet</span>
+                            </div>
+                            <div class="conversation-meta">
+                                <span class="last-message-time"></span>
+                                <span class="unread-badge" style="display: none;">0</span>
+                            </div>
                         </a>
                     `;
                     newConvItem.querySelector('.conversation-item').addEventListener('click', () => {
@@ -458,6 +581,9 @@
             document.getElementById('current-chat-with').textContent = `Chat with ${username}`;
             document.getElementById('chat-input-container').style.display = 'block';
             
+            // Update chat status
+            updateChatStatusIndicator(otherUserId);
+            
             // Highlight active conversation
             document.querySelectorAll('.conversation-item, .user-item').forEach(item => {
                 item.classList.remove('active');
@@ -466,6 +592,13 @@
             const activeItem = document.querySelector(`.conversation-item[data-conversation-id="${conversationId}"], .user-item[data-user-id="${otherUserId}"]`);
             if (activeItem) {
                 activeItem.classList.add('active');
+                
+                // Clear unread badge for this conversation
+                const badge = activeItem.querySelector('.unread-badge');
+                if (badge) {
+                    badge.style.display = 'none';
+                    badge.textContent = '0';
+                }
             }
             
             // Join the conversation room
@@ -546,16 +679,64 @@
                 `;
             }
             
+            let readStatus = '';
+            if (isCurrentUser && message.is_read) {
+                readStatus = '<span class="read-status">✓✓</span>';
+            } else if (isCurrentUser) {
+                readStatus = '<span class="read-status">✓</span>';
+            }
+            
             messageElement.innerHTML = `
                 ${messageContent}
                 <div class="message-info">
                     <span class="username">${message.username}</span>
                     <span class="timestamp">${timeString}</span>
+                    ${readStatus}
                 </div>
             `;
             
             messagesContainer.appendChild(messageElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function updateConversationInList(conversationId, lastMessage, lastMessageTime, unreadCount) {
+            const conversationItem = document.querySelector(`#conversations-list li[data-conversation-id="${conversationId}"]`);
+            if (conversationItem) {
+                const lastMessageEl = conversationItem.querySelector('.last-message');
+                const lastMessageTimeEl = conversationItem.querySelector('.last-message-time');
+                const unreadBadge = conversationItem.querySelector('.unread-badge');
+                
+                if (lastMessageEl && lastMessage) {
+                    lastMessageEl.textContent = lastMessage.length > 20 ? lastMessage.substring(0, 20) + '...' : lastMessage;
+                }
+                
+                if (lastMessageTimeEl && lastMessageTime) {
+                    const messageTime = new Date(lastMessageTime);
+                    lastMessageTimeEl.textContent = formatTimeForList(messageTime);
+                }
+                
+                if (unreadBadge && unreadCount > 0 && conversationId !== currentConversationId) {
+                    unreadBadge.textContent = unreadCount;
+                    unreadBadge.style.display = 'inline-block';
+                } else if (unreadBadge) {
+                    unreadBadge.style.display = 'none';
+                }
+            }
+        }
+        
+        function formatTimeForList(date) {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            if (date >= today) {
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } else if (date >= yesterday) {
+                return 'Yesterday';
+            } else {
+                return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            }
         }
         
         function sendMessage() {
