@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mugichat-v2';
+const CACHE_NAME = 'mugichat-v3';
 const urlsToCache = [
   '/',
   '/offline',

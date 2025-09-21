@@ -533,18 +533,22 @@ def handle_disconnect():
         user_id = session['user_id']
         if user_id in online_users:
             del online_users[user_id]
-        
+
         # Notify all users about offline status change after a delay
-        # to account for page refreshes
         def delayed_offline():
             time.sleep(5)  # Wait 5 seconds
             if user_id not in online_users:  # If user didn't reconnect
-                emit('user_status', {
-                    'user_id': user_id,
-                    'status': 'offline'
-                }, broadcast=True)
-        
+                # Broadcast to all clients
+                socketio.emit(
+                    'user_status',
+                    {'user_id': user_id, 'status': 'offline'},
+                    namespace='/',  # default namespace
+                    room=None       # None = send to all clients
+                )
+
+        # Start the background task using Eventlet
         socketio.start_background_task(delayed_offline)
+
 
 @socketio.on('user_activity')
 def handle_user_activity():

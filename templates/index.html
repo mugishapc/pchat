@@ -5,7 +5,7 @@
     <div id="app-launch" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #667eea; display: flex; justify-content: center; align-items: center; z-index: 9999;">
         <div style="text-align: center; color: white;">
             <div style="width: 80px; height: 80px; background: white; border-radius: 50%; margin: 0 auto 20px; display: flex; justify-content: center; align-items: center;">
-                <span style="font-size: 40px; color: #667eea; font-weight: bold;">M</span>
+                <span style="font-size: 40px; color: #667eea; font-weight: bold;">Mpc</span>
             </div>
             <h1 style="margin-bottom: 10px;">MugiChat</h1>
             <p>Loading...</p>
@@ -59,7 +59,7 @@
                                         <span class="user-avatar">{{ conversation.other_username[0].upper() }}</span>
                                         <div class="conversation-info">
                                             <span class="user-name">{{ conversation.other_username }}</span>
-                                            <span class="last-message">{{ conversation.last_message|truncate(20) if conversation.last_message else 'No messages yet' }}</span>
+                                            <span class="last-message">{{ conversation.last_message|truncate(20) if conversation.last_message else '' }}</span>
                                         </div>
                                         <div class="conversation-meta">
                                             <span class="last-message-time">{{ conversation.last_message_time|format_time if conversation.last_message_time else '' }}</span>
@@ -105,7 +105,7 @@
                         </div>
                         <div class="audio-controls" id="audio-controls" style="display: none;">
                             <span id="recording-status">Recording... <span id="recording-timer">0s</span></span>
-                            <button id="stop-recording-btn">Stop</button>
+                            <button id="stop-recording-btn">Send</button>
                         </div>
                     </div>
                 </div>
@@ -278,12 +278,12 @@
             });
             
             window.addEventListener('offline', function() {
-                showStatus('You are offline', 'error');
+                showStatus('You are offline, Just connect to the network please', 'error');
             });
             
             // Initial check
             if (!navigator.onLine) {
-                showStatus('You are offline', 'error');
+                showStatus('You are offline, Just connect to the network please', 'error');
             }
         }
         
@@ -630,7 +630,7 @@
                             <span class="user-avatar">${username[0].toUpperCase()}</span>
                             <div class="conversation-info">
                                 <span class="user-name">${username}</span>
-                                <span class="last-message">No messages yet</span>
+                                <span class="last-message"></span>
                             </div>
                             <div class="conversation-meta">
                                 <span class="last-message-time"></span>
