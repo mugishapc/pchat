@@ -118,6 +118,7 @@ class Message(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversation.id'), nullable=False)
     is_read = db.Column(db.Boolean, default=False)
+    is_deleted = db.Column(db.Boolean, default=False)
     
     user = db.relationship('User', backref=db.backref('messages', lazy=True))
 
@@ -171,8 +172,8 @@ def index():
             'id': conv.id,
             'other_user_id': other_user.id,
             'other_username': other_user.username,
-            'last_message': conv.last_message.content if conv.last_message else None,
-            'last_message_time': conv.last_message.timestamp if conv.last_message else None,
+            'last_message': conv.last_message.content if conv.last_message and not conv.last_message.is_deleted else None,
+            'last_message_time': conv.last_message.timestamp if conv.last_message and not conv.last_message.is_deleted else None,
             'unread_count': unread_count
         })
     
@@ -263,7 +264,7 @@ def get_messages(conversation_id):
     Message.query.filter_by(conversation_id=conversation_id, is_read=False).update({Message.is_read: True})
     db.session.commit()
     
-    messages = Message.query.filter_by(conversation_id=conversation_id).order_by(Message.timestamp.asc()).all()
+    messages = Message.query.filter_by(conversation_id=conversation_id, is_deleted=False).order_by(Message.timestamp.asc()).all()
     message_list = []
     for msg in messages:
         message_list.append({
@@ -301,6 +302,51 @@ def create_conversation(other_user_id):
     db.session.commit()
     
     return jsonify({'conversation_id': new_conversation.id})
+
+@app.route('/delete_conversation/<int:conversation_id>', methods=['DELETE'])
+def delete_conversation(conversation_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    # Check if user is part of this conversation
+    conversation = db.session.get(Conversation, conversation_id)
+    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+        return jsonify({'error': 'Access denied'}), 403
+    
+    # Mark all messages as deleted
+    Message.query.filter_by(conversation_id=conversation_id).update({Message.is_deleted: True})
+    
+    # Update conversation last message to None
+    conversation.last_message_id = None
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
+@app.route('/delete_message/<int:message_id>', methods=['DELETE'])
+def delete_message(message_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    # Get the message
+    message = db.session.get(Message, message_id)
+    if not message:
+        return jsonify({'error': 'Message not found'}), 404
+    
+    # Check if user owns this message
+    if message.user_id != session['user_id']:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    # Mark message as deleted
+    message.is_deleted = True
+    db.session.commit()
+    
+    # Emit event to update clients
+    socketio.emit('message_deleted', {
+        'message_id': message_id,
+        'conversation_id': message.conversation_id
+    }, room=f'conversation_{message.conversation_id}')
+    
+    return jsonify({'success': True})
 
 @app.route('/upload_audio/<int:conversation_id>', methods=['POST'])
 def upload_audio(conversation_id):
@@ -386,8 +432,8 @@ def update_conversation_list(conversation, user_id):
         'conversation_id': conversation.id,
         'other_user_id': other_user.id,
         'other_username': other_user.username,
-        'last_message': conversation.last_message.content if conversation.last_message else None,
-        'last_message_time': conversation.last_message.timestamp.isoformat() if conversation.last_message else None,
+        'last_message': conversation.last_message.content if conversation.last_message and not conversation.last_message.is_deleted else None,
+        'last_message_time': conversation.last_message.timestamp.isoformat() if conversation.last_message and not conversation.last_message.is_deleted else None,
         'unread_count': unread_count
     }, room=f'user_{user_id}')
 
@@ -601,6 +647,25 @@ def handle_message(data):
             )
         except Exception as e:
             print(f"Failed to send push notification: {e}")
+
+@socketio.on('message_deleted')
+def handle_message_deleted(data):
+    if 'user_id' not in session:
+        return
+    
+    message_id = data.get('message_id')
+    conversation_id = data.get('conversation_id')
+    
+    # Check if user is part of this conversation
+    conversation = db.session.get(Conversation, conversation_id)
+    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+        return
+    
+    # Broadcast to conversation room
+    emit('message_deleted', {
+        'message_id': message_id,
+        'conversation_id': conversation_id
+    }, room=f'conversation_{conversation_id}')
 
 @app.route('/check_auth')
 def check_auth():
