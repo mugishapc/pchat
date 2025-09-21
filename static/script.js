@@ -146,3 +146,48 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn('Audio recording not supported in this browser');
     }
 });
+
+
+
+// Add this to your existing JavaScript code
+
+// Detect mobile devices
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Handle mobile input focus
+if (isMobileDevice()) {
+    const messageInput = document.getElementById('message-input');
+    const chatContainer = document.querySelector('.chat-container');
+    
+    if (messageInput) {
+        messageInput.addEventListener('focus', function() {
+            document.body.classList.add('keyboard-visible');
+            chatContainer.classList.add('mobile-input-focus');
+            
+            // Scroll to bottom when input is focused
+            setTimeout(() => {
+                const messagesContainer = document.querySelector('.chat-messages');
+                if (messagesContainer) {
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+            }, 300);
+        });
+        
+        messageInput.addEventListener('blur', function() {
+            document.body.classList.remove('keyboard-visible');
+            chatContainer.classList.remove('mobile-input-focus');
+        });
+    }
+    
+    // Adjust viewport height for mobile browsers
+    function setVH() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    
+    setVH();
+    window.addEventListener('resize', setVH);
+    window.addEventListener('orientationchange', setVH);
+}

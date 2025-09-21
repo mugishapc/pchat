@@ -1053,3 +1053,234 @@ audio {
     outline: 2px solid var(--primary-green);
     outline-offset: 2px;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* Mobile-specific enhancements for chat input */
+@media (max-width: 768px) {
+    .chat-layout {
+        flex-direction: column;
+        height: calc(100% - 60px);
+    }
+    
+    .sidebar {
+        width: 100%;
+        height: 40%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-light);
+    }
+    
+    .main-chat-area {
+        height: 60%;
+        position: relative;
+    }
+    
+    .message {
+        max-width: 85%;
+    }
+    
+    audio {
+        width: 200px;
+    }
+    
+    .chat-header {
+        padding: 10px 15px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+    
+    .user-info {
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+        margin-right: 10px;
+    }
+    
+    .user-name {
+        font-size: 16px;
+    }
+    
+    .conversation-item, .user-item {
+        padding: 10px 15px;
+    }
+    
+    /* Mobile chat input specific fixes */
+    .chat-input-container {
+        position: sticky;
+        bottom: 0;
+        width: 100%;
+        background-color: #f0f0f0;
+        padding: 10px 12px;
+        border-top: 1px solid var(--border-dark);
+        z-index: 100;
+        /* Add safe area for mobile notches */
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+    
+    .input-group {
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    #message-input {
+        min-height: 40px;
+        font-size: 16px; /* Prevents zoom on iOS */
+        line-height: 1.4;
+        padding: 10px 15px;
+        border-radius: 20px;
+        flex: 1;
+    }
+    
+    #send-btn {
+        margin-left: 0;
+        margin-top: 0;
+        flex-shrink: 0;
+        width: 40px;
+        height: 40px;
+    }
+    
+    .emoji-btn, .attach-btn {
+        font-size: 20px;
+        padding: 6px;
+        flex-shrink: 0;
+    }
+    
+    /* Ensure messages don't get hidden behind input */
+    .chat-messages {
+        padding-bottom: 70px; /* Space for input area */
+    }
+    
+    /* Adjust for mobile landscape */
+    @media (max-height: 500px) and (orientation: landscape) {
+        .sidebar {
+            height: 30%;
+        }
+        
+        .main-chat-area {
+            height: 70%;
+        }
+        
+        .chat-messages {
+            padding-bottom: 60px;
+        }
+        
+        .chat-input-container {
+            padding: 8px 12px;
+        }
+        
+        #message-input {
+            min-height: 36px;
+            padding: 8px 12px;
+        }
+    }
+}
+
+@media (max-width: 480px) {
+    .auth-form {
+        padding: 1.5rem;
+        margin: 0 15px;
+    }
+    
+    .user-avatar, .conversation-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    .user-name {
+        font-size: 16px;
+    }
+    
+    .message {
+        max-width: 90%;
+        padding: 8px 12px;
+    }
+    
+    audio {
+        width: 180px;
+    }
+    
+    .logout-btn, .delete-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    input, textarea, select {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+    
+    .sidebar-header {
+        padding: 10px 12px;
+    }
+    
+    .chat-input-container {
+        padding: 10px 12px;
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+    
+    /* Extra small devices */
+    #message-input {
+        font-size: 15px;
+        padding: 8px 12px;
+    }
+    
+    .emoji-btn, .attach-btn {
+        font-size: 18px;
+    }
+}
+
+/* PWA-specific styles for mobile */
+@media all and (display-mode: standalone) {
+    .chat-header {
+        padding-top: calc(10px + env(safe-area-inset-top, 0px));
+        padding-left: calc(16px + env(safe-area-inset-left, 0px));
+        padding-right: calc(16px + env(safe-area-inset-right, 0px));
+    }
+    
+    .chat-input-container {
+        padding-left: calc(12px + env(safe-area-inset-left, 0px));
+        padding-right: calc(12px + env(safe-area-inset-right, 0px));
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+    
+    /* Adjust for iPhone notch */
+    @media (max-width: 768px) {
+        .chat-header {
+            padding-top: calc(10px + env(safe-area-inset-top, 0px));
+            min-height: calc(60px + env(safe-area-inset-top, 0px));
+        }
+    }
+}
+
+/* Prevent body scrolling when keyboard is visible on mobile */
+body.keyboard-visible {
+    overflow: hidden;
+    position: fixed;
+    height: 100%;
+    width: 100%;
+}
+
+/* Additional utility class for mobile input focus */
+.mobile-input-focus #message-input {
+    border: 2px solid var(--primary-green);
+}
