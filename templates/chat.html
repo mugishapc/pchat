@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <!-- Chat Screen Template -->
+    <div id="chat-screen-template">
+        <div class="chat-screen-container">
+            <header class="chat-header">
+                <a href="{{ url_for('index') }}" class="back-btn">← Back</a>
+                <div class="chat-info">
+                    <h2 id="current-chat-with">Chat with {{ other_user.username }}</h2>
+                    <span id="current-chat-status" class="chat-status"></span>
+                </div>
+                <button id="delete-conversation-btn" class="delete-btn">Delete Chat</button>
+            </header>
+            
+            <div class="chat-messages" id="chat-messages">
+                <!-- Messages will be loaded here -->
+                <div class="empty-chat">
+                    <p>No messages yet. Start the conversation!</p>
+                </div>
+            </div>
+            
+            <div class="chat-input-container">
+                <div class="input-group">
+                    <button id="mic-btn" class="mic-btn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 1C11.2044 1 10.4413 1.31607 9.87868 1.87868C9.31607 2.44129 9 3.20435 9 4V12C9 12.7956 9.31607 13.5587 9.87868 14.1213C10.4413 14.6839 11.2044 15 12 15C12.7956 15 13.5587 14.6839 14.1213 14.1213C14.6839 13.5587 15 12.7956 15 12V4C15 3.20435 14.6839 2.44129 14.1213 1.87868C13.5587 1.31607 12.7956 1 12 1Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M19 10V12C19 13.8565 18.2625 15.637 16.9497 16.9497C15.637 18.2625 13.8565 19 12 19C10.1435 19 8.36301 18.2625 7.05025 16.9497C5.7375 15.637 5 13.8565 5 12V10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M12 19V23" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M8 23H16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                    <input type="text" id="message-input" placeholder="Type your message...">
+                    <button id="send-btn">➤</button>
+                </div>
+                <div class="audio-controls" id="audio-controls" style="display: none;">
+                    <span id="recording-status">Recording... <span id="recording-timer">0s</span></span>
+                    <button id="stop-recording-btn">➤</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden field for VAPID public key -->
+    <input type="hidden" id="vapid-public-key" value="{{ vapid_public_key }}">
+    <input type="hidden" id="conversation-id" value="{{ conversation.id }}">
+    <input type="hidden" id="other-user-id" value="{{ other_user.id }}">
+{% endblock %}
+
+{% block scripts %}
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Global variables
+        let socket;
+        let currentConversationId = document.getElementById('conversation-id').value;
+        let currentOtherUserId = document.getElementById('other-user-id').value;
+        let currentUserId = null;
+        let currentUsername = '{{ current_user.username }}';
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordingTimer = null;
+        let recordingSeconds = 0;
+        
+        // DOM elements
+        const chatMessages = document.getElementById('chat-messages');
+        const messageInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const micBtn = document.getElementById('mic-btn');
+        const audioControls = document.getElementById('audio-controls');
+        const recordingStatus = document.getElementById('recording-status');
+        const recordingTimerEl = document.getElementById('recording-timer');
+        const stopRecordingBtn = document.getElementById('stop-recording-btn');
+        const deleteConversationBtn = document.getElementById('delete-conversation-btn');
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthStatus();
+        });
+        
+        function checkAuthStatus() {
+            fetch('/check_auth', {
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.authenticated) {
+                    currentUserId = data.user_id;
+                    initializeSocket();
+                    loadMessages();
+                    loadUserStatus();
+                    
+                    // Set up event listeners
+                    setupChatEvents();
+                } else {
+                    window.location.href = '/login';
+                }
+            })
+            .catch(error => {
+                console.error('Auth check error:', error);
+                window.location.href = '/login';
+            });
+        }
+        
+        function initializeSocket() {
+            // Connect to Socket.IO server
+            socket = io({
+                transports: ['websocket', 'polling']
+            });
+            
+            // Socket event handlers
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                
+                // Join the conversation room
+                socket.emit('join_conversation', {conversation_id: currentConversationId});
+                
+                // Send periodic activity pings to stay online
+                setInterval(() => {
+                    socket.emit('user_activity');
+                }, 15000);
+            });
+            
+            socket.on('new_message', function(data) {
+                if (data.conversation_id === currentConversationId) {
+                    addMessageToChat(data);
+                }
+            });
+            
+            socket.on('user_status', function(data) {
+                // Update user status if it's the other user in this conversation
+                if (data.user_id == currentOtherUserId) {
+                    updateChatStatusIndicator(data.status);
+                }
+            });
+            
+            socket.on('message_deleted', function(data) {
+                if (data.conversation_id === currentConversationId) {
+                    const messageElement = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
+                    if (messageElement) {
+                        messageElement.remove();
+                    }
+                }
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+            });
+        }
+        
+        function loadMessages() {
+            fetch(`/messages/${currentConversationId}`, {
+                credentials: 'include'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`HTTP ${response.status}: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(messages => {
+                chatMessages.innerHTML = '';
+                
+                if (messages.length === 0) {
+                    chatMessages.innerHTML = `
+                        <div class="empty-chat">
+                            <p>No messages yet. Start the conversation!</p>
+                        </div>
+                    `;
+                } else {
+                    messages.forEach(addMessageToChat);
+                }
+                
+                // Scroll to bottom
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            })
+            .catch(error => {
+                console.error('Error loading messages:', error);
+                
+                // Check if it's an authentication error
+                if (error.message.includes('401') || error.message.includes('403')) {
+                    alert('Session expired. Please log in again.');
+                    window.location.href = '/login';
+                } else {
+                    alert('Error loading messages: ' + error.message);
+                }
+            });
+        }
+        
+        function loadUserStatus() {
+            fetch(`/user_status/${currentOtherUserId}`, {
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                updateChatStatusIndicator(data.status);
+            })
+            .catch(error => {
+                console.error('Error loading user status:', error);
+            });
+        }
+        
+        function updateChatStatusIndicator(status) {
+            const statusElement = document.getElementById('current-chat-status');
+            if (statusElement) {
+                statusElement.textContent = status === 'online' ? 'online' : 
+                                          status === 'recently online' ? 'recently online' : 'offline';
+                statusElement.className = `chat-status ${status}`;
+            }
+        }
+        
+        function setupChatEvents() {
+            // Microphone button for recording
+            micBtn.addEventListener('click', function() {
+                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                    startRecording();
+                } else {
+                    stopRecording();
+                }
+            });
+            
+            // Stop recording button
+            stopRecordingBtn.addEventListener('click', function() {
+                stopRecording();
+            });
+            
+            // Send message button
+            sendBtn.addEventListener('click', sendMessage);
+            
+            // Send message on Enter key
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+            
+            // Delete conversation button
+            deleteConversationBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to delete this conversation? All messages will be deleted.')) {
+                    fetch(`/delete_conversation/${currentConversationId}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            window.location.href = '/';
+                        } else {
+                            alert('Error deleting conversation');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error deleting conversation:', error);
+                        alert('Error deleting conversation. Please try again.');
+                    });
+                }
+            });
+        }
+        
+        function addMessageToChat(message) {
+            // Remove empty chat message if it exists
+            const emptyChat = chatMessages.querySelector('.empty-chat');
+            if (emptyChat) {
+                emptyChat.remove();
+            }
+            
+            const messageElement = document.createElement('div');
+            const isCurrentUser = message.user_id === currentUserId;
+            messageElement.className = `message ${isCurrentUser ? 'sent' : 'received'}`;
+            messageElement.setAttribute('data-message-id', message.id);
+            
+            const timestamp = new Date(message.timestamp);
+            const timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            let messageContent = '';
+            
+            if (message.type === 'text') {
+                messageContent = `
+                    <div class="message-content">${message.content}</div>
+                `;
+            } else if (message.type === 'audio') {
+                messageContent = `
+                    <div class="message-content audio-message">
+                        <audio controls>
+                            <source src="${message.content}" type="audio/webm">
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+                `;
+            }
+            
+            let readStatus = '';
+            if (isCurrentUser && message.is_read) {
+                readStatus = '<span class="read-status">✓✓</span>';
+            } else if (isCurrentUser) {
+                readStatus = '<span class="read-status">✓</span>';
+            }
+            
+            // Add delete button for user's own messages
+            let deleteButton = '';
+            if (isCurrentUser) {
+                deleteButton = `<button class="delete-message-btn" data-message-id="${message.id}">Delete</button>`;
+            }
+            
+            messageElement.innerHTML = `
+                ${messageContent}
+                <div class="message-info">
+                    <span class="username">${message.username}</span>
+                    <span class="timestamp">${timeString}</span>
+                    ${readStatus}
+                    ${deleteButton}
+                </div>
+            `;
+            
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Add event listener for delete button
+            const deleteBtn = messageElement.querySelector('.delete-message-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', function() {
+                    const messageId = this.getAttribute('data-message-id');
+                    deleteMessage(messageId);
+                });
+            }
+        }
+        
+        function deleteMessage(messageId) {
+            fetch(`/delete_message/${messageId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Error deleting message');
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting message:', error);
+                alert('Error deleting message. Please try again.');
+            });
+        }
+        
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            
+            if (message) {
+                socket.emit('send_message', {
+                    content: message,
+                    conversation_id: currentConversationId
+                });
+                messageInput.value = '';
+            }
+        }
+        
+        function startRecording() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert("Your browser doesn't support audio recording");
+                return;
+            }
+            
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    audioChunks = [];
+                    mediaRecorder = new MediaRecorder(stream);
+                    
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        sendAudioMessage(audioBlob);
+                        resetRecordingUI();
+                    };
+                    
+                    mediaRecorder.start();
+                    showRecordingUI();
+                })
+                .catch(error => {
+                    console.error('Error accessing microphone:', error);
+                    alert('Error accessing microphone. Please ensure you have granted permission.');
+                });
+        }
+        
+        function showRecordingUI() {
+            micBtn.classList.add('recording');
+            audioControls.style.display = 'flex';
+            recordingSeconds = 0;
+            recordingTimerEl.textContent = '0s';
+            
+            // Start timer
+            recordingTimer = setInterval(() => {
+                recordingSeconds++;
+                recordingTimerEl.textContent = `${recordingSeconds}s`;
+            }, 1000);
+        }
+        
+        function resetRecordingUI() {
+            micBtn.classList.remove('recording');
+            audioControls.style.display = 'none';
+            clearInterval(recordingTimer);
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+        }
+        
+        function sendAudioMessage(audioBlob) {
+            const formData = new FormData();
+            formData.append('audio', audioBlob);
+            
+            fetch(`/upload_audio/${currentConversationId}`, {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to upload audio');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data.success) {
+                    alert('Error sending audio message');
+                }
+            })
+            .catch(error => {
+                console.error('Error sending audio:', error);
+                alert('Error sending audio message. Please try again.');
+            });
+        }
+    </script>
+{% endblock %}

@@ -12,11 +12,11 @@
         </div>
     </div>
 
-    <!-- Chat Template -->
-    <div id="chat-template" style="display: none;">
-        <div class="chat-container">
+    <!-- Chat List Template -->
+    <div id="chat-list-template">
+        <div class="chat-list-container">
             <header class="chat-header">
-                <h1>MugiChat-App</h1>
+                <h1>MugiChat</h1>
                 <div class="user-info">
                     <span id="welcome-user">Welcome, {{ username }}</span>
                     <a href="{{ url_for('logout') }}" id="logout-btn" class="logout-btn">Logout</a>
@@ -24,90 +24,52 @@
                 </div>
             </header>
             
-            <div class="chat-layout">
-                <!-- Sidebar for users and conversations -->
-                <div class="sidebar">
-                    <div class="sidebar-header">
-                        <h3>Chats</h3>
-                        <button id="new-chat-btn" class="new-chat-btn">+</button>
-                    </div>
-                    
-                    <div class="sidebar-content">
-                        <div class="users-panel" id="users-panel" style="display: none;">
-                            <div class="users-header">
-                                <button id="back-to-chats" class="back-btn">←</button>
-                                <h4>Select a user</h4>
-                            </div>
-                            <ul id="users-list">
-                                {% for user in users %}
-                                <li data-user-id="{{ user.id }}">
-                                    <a href="#" class="user-item">
-                                        <span class="user-avatar">{{ user.username[0].upper() }}</span>
-                                        <span class="user-name">{{ user.username }}</span>
-                                        <span class="user-status" data-user-id="{{ user.id }}"></span>
-                                    </a>
-                                </li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        
-                        <div class="conversations-panel" id="conversations-panel">
-                            <ul id="conversations-list">
-                                {% for conversation in conversations %}
-                                <li data-conversation-id="{{ conversation.id }}" data-other-user-id="{{ conversation.other_user_id }}">
-                                    <a href="#" class="conversation-item">
-                                        <span class="user-avatar">{{ conversation.other_username[0].upper() }}</span>
-                                        <div class="conversation-info">
-                                            <span class="user-name">{{ conversation.other_username }}</span>
-                                            <span class="last-message">{{ conversation.last_message|truncate(20) if conversation.last_message else '' }}</span>
-                                        </div>
-                                        <div class="conversation-meta">
-                                            <span class="last-message-time">{{ conversation.last_message_time|format_time if conversation.last_message_time else '' }}</span>
-                                            {% if conversation.unread_count > 0 %}
-                                            <span class="unread-badge">{{ conversation.unread_count }}</span>
-                                            {% endif %}
-                                        </div>
-                                        <button class="delete-conversation-btn" data-conversation-id="{{ conversation.id }}">×</button>
-                                    </a>
-                                </li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    </div>
+            <div class="chat-list-content">
+                <div class="chat-list-header">
+                    <h2>Chats</h2>
+                    <p>The app by Mpc!</p>
+                    <button id="new-chat-btn" class="new-chat-btn">+ New Chat</button>
                 </div>
                 
-                <!-- Main chat area -->
-                <div class="main-chat-area">
-                    <div class="chat-info-bar" id="chat-info-bar">
-                        <span id="current-chat-with">Select a user to start chatting</span>
-                        <span id="current-chat-status"></span>
+                <div class="users-panel" id="users-panel" style="display: none;">
+                    <div class="users-header">
+                        <button id="back-to-chats" class="back-btn">← Back</button>
+                        <h3>Select a user</h3>
                     </div>
-                    
-                    <div class="chat-messages" id="chat-messages">
-                        <!-- Messages will be loaded here -->
-                        <div class="empty-chat">
-                            <p>Select a conversation or start a new one to begin messaging</p>
-                        </div>
-                    </div>
-                    
-                    <div class="chat-input-container" id="chat-input-container" style="display: none;">
-                        <div class="input-group">
-                            <button id="mic-btn" class="mic-btn">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12 1C11.2044 1 10.4413 1.31607 9.87868 1.87868C9.31607 2.44129 9 3.20435 9 4V12C9 12.7956 9.31607 13.5587 9.87868 14.1213C10.4413 14.6839 11.2044 15 12 15C12.7956 15 13.5587 14.6839 14.1213 14.1213C14.6839 13.5587 15 12.7956 15 12V4C15 3.20435 14.6839 2.44129 14.1213 1.87868C13.5587 1.31607 12.7956 1 12 1Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M19 10V12C19 13.8565 18.2625 15.637 16.9497 16.9497C15.637 18.2625 13.8565 19 12 19C10.1435 19 8.36301 18.2625 7.05025 16.9497C5.7375 15.637 5 13.8565 5 12V10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M12 19V23" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M8 23H16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                            </button>
-                            <input type="text" id="message-input" placeholder="Type your message...">
-                            <button id="send-btn">Send</button>
-                        </div>
-                        <div class="audio-controls" id="audio-controls" style="display: none;">
-                            <span id="recording-status">Recording... <span id="recording-timer">0s</span></span>
-                            <button id="stop-recording-btn">Send</button>
-                        </div>
-                    </div>
+                    <ul id="users-list">
+                        {% for user in users %}
+                        <li data-user-id="{{ user.id }}">
+                            <a href="#" class="user-item">
+                                <span class="user-avatar">{{ user.username[0].upper() }}</span>
+                                <span class="user-name">{{ user.username }}</span>
+                                <span class="user-status" data-user-id="{{ user.id }}"></span>
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                
+                <div class="conversations-panel" id="conversations-panel">
+                    <ul id="conversations-list">
+                        {% for conversation in conversations %}
+                        <li data-conversation-id="{{ conversation.id }}" data-other-user-id="{{ conversation.other_user_id }}">
+                            <a href="{{ url_for('chat', conversation_id=conversation.id) }}" class="conversation-item">
+                                <span class="user-avatar">{{ conversation.other_username[0].upper() }}</span>
+                                <div class="conversation-info">
+                                    <span class="user-name">{{ conversation.other_username }}</span>
+                                    <span class="last-message">{{ conversation.last_message|truncate(20) if conversation.last_message else '' }}</span>
+                                </div>
+                                <div class="conversation-meta">
+                                    <span class="last-message-time">{{ conversation.last_message_time|format_time if conversation.last_message_time else '' }}</span>
+                                    {% if conversation.unread_count > 0 %}
+                                    <span class="unread-badge">{{ conversation.unread_count }}</span>
+                                    {% endif %}
+                                </div>
+                                <button class="delete-conversation-btn" data-conversation-id="{{ conversation.id }}">×</button>
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
                 </div>
             </div>
         </div>
@@ -122,32 +84,18 @@
     <script>
         // Global variables
         let socket;
-        let currentConversationId = null;
-        let currentOtherUserId = null;
-        let currentUsername = '{{ username }}';
         let currentUserId = null;
-        let mediaRecorder;
-        let audioChunks = [];
-        let pushSubscription = null;
         let userStatuses = {};
-        let recordingTimer = null;
-        let recordingSeconds = 0;
         
         // DOM elements
         const logoutBtn = document.getElementById('logout-btn');
         const deleteAccountBtn = document.getElementById('delete-account-btn');
-        const vapidPublicKey = document.getElementById('vapid-public-key').value;
         const appLaunch = document.getElementById('app-launch');
-        const chatTemplate = document.getElementById('chat-template');
+        const chatListTemplate = document.getElementById('chat-list-template');
         const newChatBtn = document.getElementById('new-chat-btn');
         const usersPanel = document.getElementById('users-panel');
         const conversationsPanel = document.getElementById('conversations-panel');
         const backToChatsBtn = document.getElementById('back-to-chats');
-        const micBtn = document.getElementById('mic-btn');
-        const audioControls = document.getElementById('audio-controls');
-        const recordingStatus = document.getElementById('recording-status');
-        const recordingTimerEl = document.getElementById('recording-timer');
-        const stopRecordingBtn = document.getElementById('stop-recording-btn');
         
         // Check if user is already logged in
         document.addEventListener('DOMContentLoaded', function() {
@@ -156,164 +104,12 @@
                 appLaunch.style.opacity = '0';
                 setTimeout(() => {
                     appLaunch.style.display = 'none';
-                    chatTemplate.style.display = 'block';
-                    
-                    // Set visual viewport height for mobile devices
-                    setVisualViewportHeight();
+                    chatListTemplate.style.display = 'block';
                     
                     checkAuthStatus();
                 }, 500);
             }, 2000);
         });
-        
-        // Set visual viewport height for mobile devices
-        function setVisualViewportHeight() {
-            if (window.visualViewport) {
-                const setVH = () => {
-                    document.documentElement.style.setProperty('--vh', `${visualViewport.height * 0.01}px`);
-                };
-                
-                setVH();
-                window.visualViewport.addEventListener('resize', setVH);
-                window.addEventListener('orientationchange', setVH);
-            }
-        }
-        
-        // Initialize service worker for PWA functionality
-        function initializeServiceWorker() {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('{{ url_for("static", filename="service-worker.js") }}')
-                    .then(function(registration) {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    })
-                    .catch(function(error) {
-                        console.log('ServiceWorker registration failed: ', error);
-                    });
-            }
-        }
-        
-        // Initialize push notifications
-        function initializePushNotifications() {
-            if ('serviceWorker' in navigator && 'PushManager' in window) {
-                navigator.serviceWorker.ready.then(function(registration) {
-                    registration.pushManager.getSubscription()
-                        .then(function(subscription) {
-                            if (subscription) {
-                                pushSubscription = subscription;
-                                savePushSubscription(subscription);
-                            } else {
-                                subscribeUser(registration);
-                            }
-                        })
-                        .catch(function(error) {
-                            console.log('Error getting push subscription:', error);
-                        });
-                });
-            }
-        }
-        
-        // Subscribe user to push notifications
-        function subscribeUser(registration) {
-            const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-            
-            registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: applicationServerKey
-            })
-            .then(function(subscription) {
-                pushSubscription = subscription;
-                savePushSubscription(subscription);
-            })
-            .catch(function(error) {
-                console.log('Failed to subscribe the user:', error);
-            });
-        }
-        
-        // Save push subscription to server
-        function savePushSubscription(subscription) {
-            fetch('/save_subscription', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    subscription: subscription
-                }),
-                credentials: 'include'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('Push subscription saved successfully');
-                } else {
-                    console.error('Failed to save push subscription');
-                }
-            })
-            .catch(error => {
-                console.error('Error saving push subscription:', error);
-            });
-        }
-        
-        // Convert base64 string to Uint8Array
-        function urlBase64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding)
-                .replace(/\-/g, '+')
-                .replace(/_/g, '/');
-            
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-        }
-        
-        // Set up network status listener
-        function setupNetworkStatusListener() {
-            window.addEventListener('online', function() {
-                showStatus('Back online', 'success');
-                // Try to resend any pending messages if needed
-            });
-            
-            window.addEventListener('offline', function() {
-                showStatus('You are offline, Just connect to the network please', 'error');
-            });
-            
-            // Initial check
-            if (!navigator.onLine) {
-                showStatus('You are offline, Just connect to the network please', 'error');
-            }
-        }
-        
-        // Show network status message
-        function showStatus(message, type) {
-            // Create or show a status notification
-            let statusEl = document.getElementById('network-status');
-            if (!statusEl) {
-                statusEl = document.createElement('div');
-                statusEl.id = 'network-status';
-                statusEl.style.position = 'fixed';
-                statusEl.style.top = '10px';
-                statusEl.style.left = '50%';
-                statusEl.style.transform = 'translateX(-50%)';
-                statusEl.style.padding = '10px 20px';
-                statusEl.style.borderRadius = '5px';
-                statusEl.style.zIndex = '1000';
-                statusEl.style.fontWeight = 'bold';
-                document.body.appendChild(statusEl);
-            }
-            
-            statusEl.textContent = message;
-            statusEl.style.backgroundColor = type === 'success' ? '#4caf50' : '#f44336';
-            statusEl.style.color = 'white';
-            statusEl.style.display = 'block';
-            
-            setTimeout(() => {
-                statusEl.style.display = 'none';
-            }, 3000);
-        }
         
         function checkAuthStatus() {
             fetch('/check_auth', {
@@ -323,12 +119,7 @@
             .then(data => {
                 if (data.authenticated) {
                     currentUserId = data.user_id;
-                    currentUsername = data.username;
-                    initializeSocket();
                     loadUserStatuses();
-                    
-                    // Set up chat event listeners
-                    setupChatEvents();
                     
                     // Set up user and conversation click events
                     setupUserAndConversationEvents();
@@ -341,9 +132,6 @@
                     
                     // Listen for online/offline status
                     setupNetworkStatusListener();
-                    
-                    // Initialize push notifications
-                    initializePushNotifications();
                 } else {
                     window.location.href = '/login';
                 }
@@ -374,11 +162,6 @@
                 const userId = item.closest('li').getAttribute('data-user-id');
                 updateUserStatusIndicator(userId);
             });
-            
-            // Update status for current chat if applicable
-            if (currentOtherUserId) {
-                updateChatStatusIndicator(currentOtherUserId);
-            }
         }
         
         function updateUserStatusIndicator(userId) {
@@ -391,73 +174,7 @@
             }
         }
         
-        function updateChatStatusIndicator(userId) {
-            const statusElement = document.getElementById('current-chat-status');
-            if (statusElement && userStatuses[userId]) {
-                const status = userStatuses[userId].status;
-                statusElement.textContent = status === 'online' ? 'online' : 
-                                          status === 'recently online' ? 'recently online' : 'offline';
-                statusElement.className = `chat-status ${status}`;
-            }
-        }
-        
-        function initializeSocket() {
-            // Connect to Socket.IO server
-            socket = io({
-                transports: ['websocket', 'polling']
-            });
-            
-            // Socket event handlers
-            socket.on('connect', function() {
-                console.log('Connected to server');
-                
-                // Send periodic activity pings to stay online
-                setInterval(() => {
-                    socket.emit('user_activity');
-                }, 15000);
-            });
-            
-            socket.on('new_message', function(data) {
-                if (data.conversation_id === currentConversationId) {
-                    addMessageToChat(data);
-                }
-                
-                // Update conversation list with new message
-                updateConversationInList(data.conversation_id, data.content, data.timestamp, true);
-            });
-            
-            socket.on('user_status', function(data) {
-                // Update user status
-                if (userStatuses[data.user_id]) {
-                    userStatuses[data.user_id].status = data.status;
-                    updateUserStatusIndicator(data.user_id);
-                    
-                    // If this is the current chat user, update their status
-                    if (currentOtherUserId == data.user_id) {
-                        updateChatStatusIndicator(data.user_id);
-                    }
-                }
-            });
-            
-            socket.on('update_conversation', function(data) {
-                updateConversationInList(data.conversation_id, data.last_message, data.last_message_time, data.unread_count);
-            });
-            
-            socket.on('message_deleted', function(data) {
-                if (data.conversation_id === currentConversationId) {
-                    const messageElement = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
-                    if (messageElement) {
-                        messageElement.remove();
-                    }
-                }
-            });
-            
-            socket.on('disconnect', function() {
-                console.log('Disconnected from server');
-            });
-        }
-        
-        function setupChatEvents() {
+        function setupUserAndConversationEvents() {
             // New chat button
             newChatBtn.addEventListener('click', function() {
                 usersPanel.style.display = 'block';
@@ -470,63 +187,12 @@
                 conversationsPanel.style.display = 'block';
             });
             
-            // Microphone button for recording
-            micBtn.addEventListener('click', function() {
-                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                    startRecording();
-                } else {
-                    stopRecording();
-                }
-            });
-            
-            // Stop recording button
-            stopRecordingBtn.addEventListener('click', function() {
-                stopRecording();
-            });
-            
-            // Send message button
-            document.getElementById('send-btn').addEventListener('click', sendMessage);
-            
-            // Send message on Enter key
-            document.getElementById('message-input').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    sendMessage();
-                }
-            });
-            
-            // Better touch handling for mobile
-            improveMobileTouchHandling();
-        }
-        
-        function setupUserAndConversationEvents() {
             document.querySelectorAll('.user-item').forEach(item => {
                 item.addEventListener('click', function(e) {
                     e.preventDefault();
                     const userId = this.closest('li').getAttribute('data-user-id');
                     const username = this.querySelector('.user-name').textContent;
                     startConversation(userId, username);
-                    
-                    // Go back to conversations panel
-                    usersPanel.style.display = 'none';
-                    conversationsPanel.style.display = 'block';
-                });
-            });
-            
-            document.querySelectorAll('.conversation-item').forEach(item => {
-                item.addEventListener('click', function(e) {
-                    if (e.target.classList.contains('delete-conversation-btn')) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const conversationId = this.closest('li').getAttribute('data-conversation-id');
-                        deleteConversation(conversationId);
-                        return;
-                    }
-                    
-                    e.preventDefault();
-                    const conversationId = this.closest('li').getAttribute('data-conversation-id');
-                    const otherUserId = this.closest('li').getAttribute('data-other-user-id');
-                    const username = this.querySelector('.user-name').textContent;
-                    loadConversation(conversationId, otherUserId, username);
                 });
             });
             
@@ -579,31 +245,6 @@
             });
         }
         
-        // Improve touch handling for mobile devices
-        function improveMobileTouchHandling() {
-            // Prevent zoom on double-tap
-            let lastTouchEnd = 0;
-            document.addEventListener('touchend', function(event) {
-                const now = (new Date()).getTime();
-                if (now - lastTouchEnd <= 300) {
-                    event.preventDefault();
-                }
-                lastTouchEnd = now;
-            }, false);
-            
-            // Better button touch feedback
-            const buttons = document.querySelectorAll('button, a');
-            buttons.forEach(button => {
-                button.addEventListener('touchstart', function() {
-                    this.classList.add('touch-active');
-                });
-                
-                button.addEventListener('touchend', function() {
-                    this.classList.remove('touch-active');
-                });
-            });
-        }
-        
         function startConversation(userId, username) {
             fetch(`/conversation/${userId}`, {
                 method: 'POST',
@@ -616,45 +257,8 @@
                 return response.json();
             })
             .then(data => {
-                loadConversation(data.conversation_id, userId, username);
-                
-                // Add to conversations list if not already there
-                const convExists = document.querySelector(`#conversations-list li[data-conversation-id="${data.conversation_id}"]`);
-                if (!convExists) {
-                    const convList = document.getElementById('conversations-list');
-                    const newConvItem = document.createElement('li');
-                    newConvItem.setAttribute('data-conversation-id', data.conversation_id);
-                    newConvItem.setAttribute('data-other-user-id', userId);
-                    newConvItem.innerHTML = `
-                        <a href="#" class="conversation-item">
-                            <span class="user-avatar">${username[0].toUpperCase()}</span>
-                            <div class="conversation-info">
-                                <span class="user-name">${username}</span>
-                                <span class="last-message"></span>
-                            </div>
-                            <div class="conversation-meta">
-                                <span class="last-message-time"></span>
-                                <span class="unread-badge" style="display: none;">0</span>
-                            </div>
-                            <button class="delete-conversation-btn" data-conversation-id="${data.conversation_id}">×</button>
-                        </a>
-                    `;
-                    newConvItem.querySelector('.conversation-item').addEventListener('click', (e) => {
-                        if (e.target.classList.contains('delete-conversation-btn')) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            deleteConversation(data.conversation_id);
-                            return;
-                        }
-                        loadConversation(data.conversation_id, userId, username);
-                    });
-                    newConvItem.querySelector('.delete-conversation-btn').addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        deleteConversation(data.conversation_id);
-                    });
-                    convList.appendChild(newConvItem);
-                }
+                // Redirect to the chat screen
+                window.location.href = `/chat/${data.conversation_id}`;
             })
             .catch(error => {
                 console.error('Error starting conversation:', error);
@@ -676,19 +280,6 @@
                         if (convItem) {
                             convItem.remove();
                         }
-                        
-                        // If this was the current conversation, clear the chat area
-                        if (currentConversationId === conversationId) {
-                            currentConversationId = null;
-                            currentOtherUserId = null;
-                            document.getElementById('current-chat-with').textContent = 'Select a user to start chatting';
-                            document.getElementById('chat-input-container').style.display = 'none';
-                            document.getElementById('chat-messages').innerHTML = `
-                                <div class="empty-chat">
-                                    <p>Select a conversation or start a new one to begin messaging</p>
-                                </div>
-                            `;
-                        }
                     } else {
                         alert('Error deleting conversation');
                     }
@@ -700,323 +291,58 @@
             }
         }
         
-        function loadConversation(conversationId, otherUserId, username) {
-            currentConversationId = conversationId;
-            currentOtherUserId = otherUserId;
-            
-            // Update UI
-            document.getElementById('current-chat-with').textContent = `Chat with ${username}`;
-            document.getElementById('chat-input-container').style.display = 'block';
-            
-            // Update chat status
-            updateChatStatusIndicator(otherUserId);
-            
-            // Highlight active conversation
-            document.querySelectorAll('.conversation-item, .user-item').forEach(item => {
-                item.classList.remove('active');
-            });
-            
-            const activeItem = document.querySelector(`.conversation-item[data-conversation-id="${conversationId}"], .user-item[data-user-id="${otherUserId}"]`);
-            if (activeItem) {
-                activeItem.classList.add('active');
-                
-                // Clear unread badge for this conversation
-                const badge = activeItem.querySelector('.unread-badge');
-                if (badge) {
-                    badge.style.display = 'none';
-                    badge.textContent = '0';
-                }
-            }
-            
-            // Join the conversation room
-            socket.emit('join_conversation', {conversation_id: conversationId});
-            
-            // Load messages with credentials included
-            fetch(`/messages/${conversationId}`, {
-                credentials: 'include'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error(`HTTP ${response.status}: ${text}`);
+        function initializeServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('{{ url_for("static", filename="service-worker.js") }}')
+                    .then(function(registration) {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(function(error) {
+                        console.log('ServiceWorker registration failed: ', error);
                     });
-                }
-                return response.json();
-            })
-            .then(messages => {
-                const messagesContainer = document.getElementById('chat-messages');
-                messagesContainer.innerHTML = '';
-                
-                if (messages.length === 0) {
-                    messagesContainer.innerHTML = `
-                        <div class="empty-chat">
-                            <p>No messages yet. Start the conversation!</p>
-                        </div>
-                    `;
-                } else {
-                    messages.forEach(addMessageToChat);
-                }
-                
-                // Scroll to bottom
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            })
-            .catch(error => {
-                console.error('Error loading messages:', error);
-                
-                // Check if it's an authentication error
-                if (error.message.includes('401') || error.message.includes('403')) {
-                    alert('Session expired. Please log in again.');
-                    window.location.href = '/login';
-                } else {
-                    alert('Error loading messages: ' + error.message);
-                }
-            });
+            }
         }
         
-        function addMessageToChat(message) {
-            const messagesContainer = document.getElementById('chat-messages');
-            
-            // Remove empty chat message if it exists
-            const emptyChat = messagesContainer.querySelector('.empty-chat');
-            if (emptyChat) {
-                emptyChat.remove();
-            }
-            
-            const messageElement = document.createElement('div');
-            const isCurrentUser = message.user_id === currentUserId;
-            messageElement.className = `message ${isCurrentUser ? 'sent' : 'received'}`;
-            messageElement.setAttribute('data-message-id', message.id);
-            
-            const timestamp = new Date(message.timestamp);
-            const timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
-            let messageContent = '';
-            
-            if (message.type === 'text') {
-                messageContent = `
-                    <div class="message-content">${message.content}</div>
-                `;
-            } else if (message.type === 'audio') {
-                messageContent = `
-                    <div class="message-content audio-message">
-                        <audio controls>
-                            <source src="${message.content}" type="audio/webm">
-                            Your browser does not support the audio element.
-                        </audio>
-                    </div>
-                `;
-            }
-            
-            let readStatus = '';
-            if (isCurrentUser && message.is_read) {
-                readStatus = '<span class="read-status">✓✓</span>';
-            } else if (isCurrentUser) {
-                readStatus = '<span class="read-status">✓</span>';
-            }
-            
-            // Add delete button for user's own messages
-            let deleteButton = '';
-            if (isCurrentUser) {
-                deleteButton = `<button class="delete-message-btn" data-message-id="${message.id}">Delete</button>`;
-            }
-            
-            messageElement.innerHTML = `
-                ${messageContent}
-                <div class="message-info">
-                    <span class="username">${message.username}</span>
-                    <span class="timestamp">${timeString}</span>
-                    ${readStatus}
-                    ${deleteButton}
-                </div>
-            `;
-            
-            messagesContainer.appendChild(messageElement);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            
-            // Add event listener for delete button
-            const deleteBtn = messageElement.querySelector('.delete-message-btn');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', function() {
-                    const messageId = this.getAttribute('data-message-id');
-                    deleteMessage(messageId);
-                });
-            }
-            
-            // Add long press to delete for mobile
-            let pressTimer;
-            messageElement.addEventListener('touchstart', function() {
-                if (message.user_id === currentUserId) {
-                    pressTimer = setTimeout(() => {
-                        const messageId = this.getAttribute('data-message-id');
-                        if (confirm('Delete this message?')) {
-                            deleteMessage(messageId);
-                        }
-                    }, 1000);
-                }
+        function setupNetworkStatusListener() {
+            window.addEventListener('online', function() {
+                showStatus('Back online', 'success');
             });
             
-            messageElement.addEventListener('touchend', function() {
-                clearTimeout(pressTimer);
+            window.addEventListener('offline', function() {
+                showStatus('You are offline, Just connect to the network please', 'error');
             });
-        }
-        
-        function deleteMessage(messageId) {
-            fetch(`/delete_message/${messageId}`, {
-                method: 'DELETE',
-                credentials: 'include'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    alert('Error deleting message');
-                }
-            })
-            .catch(error => {
-                console.error('Error deleting message:', error);
-                alert('Error deleting message. Please try again.');
-            });
-        }
-        
-        function updateConversationInList(conversationId, lastMessage, lastMessageTime, unreadCount) {
-            const conversationItem = document.querySelector(`#conversations-list li[data-conversation-id="${conversationId}"]`);
-            if (conversationItem) {
-                const lastMessageEl = conversationItem.querySelector('.last-message');
-                const lastMessageTimeEl = conversationItem.querySelector('.last-message-time');
-                const unreadBadge = conversationItem.querySelector('.unread-badge');
-                
-                if (lastMessageEl && lastMessage) {
-                    lastMessageEl.textContent = lastMessage.length > 20 ? lastMessage.substring(0, 20) + '...' : lastMessage;
-                }
-                
-                if (lastMessageTimeEl && lastMessageTime) {
-                    const messageTime = new Date(lastMessageTime);
-                    lastMessageTimeEl.textContent = formatTimeForList(messageTime);
-                }
-                
-                if (unreadBadge && unreadCount > 0 && conversationId !== currentConversationId) {
-                    unreadBadge.textContent = unreadCount;
-                    unreadBadge.style.display = 'inline-block';
-                } else if (unreadBadge) {
-                    unreadBadge.style.display = 'none';
-                }
+            
+            // Initial check
+            if (!navigator.onLine) {
+                showStatus('You are offline, Just connect to the network please', 'error');
             }
         }
         
-        function formatTimeForList(date) {
-            const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            
-            if (date >= today) {
-                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } else if (date >= yesterday) {
-                return 'Yesterday';
-            } else {
-                return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-            }
-        }
-        
-        function sendMessage() {
-            const messageInput = document.getElementById('message-input');
-            const message = messageInput.value.trim();
-            
-            if (message && currentConversationId) {
-                socket.emit('send_message', {
-                    content: message,
-                    conversation_id: currentConversationId
-                });
-                messageInput.value = '';
-            } else if (!currentConversationId) {
-                alert('Please select a conversation first');
-            }
-        }
-        
-        function startRecording() {
-            if (!currentConversationId) {
-                alert('Please select a conversation first');
-                return;
+        function showStatus(message, type) {
+            // Create or show a status notification
+            let statusEl = document.getElementById('network-status');
+            if (!statusEl) {
+                statusEl = document.createElement('div');
+                statusEl.id = 'network-status';
+                statusEl.style.position = 'fixed';
+                statusEl.style.top = '10px';
+                statusEl.style.left = '50%';
+                statusEl.style.transform = 'translateX(-50%)';
+                statusEl.style.padding = '10px 20px';
+                statusEl.style.borderRadius = '5px';
+                statusEl.style.zIndex = '1000';
+                statusEl.style.fontWeight = 'bold';
+                document.body.appendChild(statusEl);
             }
             
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                alert("Your browser doesn't support audio recording");
-                return;
-            }
+            statusEl.textContent = message;
+            statusEl.style.backgroundColor = type === 'success' ? '#4caf50' : '#f44336';
+            statusEl.style.color = 'white';
+            statusEl.style.display = 'block';
             
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    audioChunks = [];
-                    mediaRecorder = new MediaRecorder(stream);
-                    
-                    mediaRecorder.ondataavailable = event => {
-                        audioChunks.push(event.data);
-                    };
-                    
-                    mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                        sendAudioMessage(audioBlob);
-                        resetRecordingUI();
-                    };
-                    
-                    mediaRecorder.start();
-                    showRecordingUI();
-                })
-                .catch(error => {
-                    console.error('Error accessing microphone:', error);
-                    alert('Error accessing microphone. Please ensure you have granted permission.');
-                });
-        }
-        
-        function showRecordingUI() {
-            micBtn.classList.add('recording');
-            audioControls.style.display = 'flex';
-            recordingSeconds = 0;
-            recordingTimerEl.textContent = '0s';
-            
-            // Start timer
-            recordingTimer = setInterval(() => {
-                recordingSeconds++;
-                recordingTimerEl.textContent = `${recordingSeconds}s`;
-            }, 1000);
-        }
-        
-        function resetRecordingUI() {
-            micBtn.classList.remove('recording');
-            audioControls.style.display = 'none';
-            clearInterval(recordingTimer);
-        }
-        
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-                mediaRecorder.stream.getTracks().forEach(track => track.stop());
-            }
-        }
-        
-        function sendAudioMessage(audioBlob) {
-            const formData = new FormData();
-            formData.append('audio', audioBlob);
-            
-            fetch(`/upload_audio/${currentConversationId}`, {
-                method: 'POST',
-                body: formData,
-                credentials: 'include'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to upload audio');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (!data.success) {
-                    alert('Error sending audio message');
-                }
-            })
-            .catch(error => {
-                console.error('Error sending audio:', error);
-                alert('Error sending audio message. Please try again.');
-            });
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 3000);
         }
     </script>
 {% endblock %}

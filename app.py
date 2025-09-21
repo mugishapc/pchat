@@ -4,7 +4,7 @@ eventlet.monkey_patch()
 
 # Now import other modules
 import os
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash, abort, current_app
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
@@ -31,11 +31,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # VAPID keys for web push notifications
-VAPID_PRIVATE_KEY = os.getenv('LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ1RvQXV1N0pLTnZWSTJLWTAKaHdaOFg5S21PL0tlUXNWdFN3NExZSm5TRE9DaFJBTkNBQVFUVWJaQWY3OHlSYnRIN1VJbWNmamRhV21qVDMzVQpxbnBXWGt2ck5tRndy1JSRnFBOUJmd0ZUZ2xuSjQzV1J4emFJc0ZnZkdlWUluQzVpY2ZEM3FuNwotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tCg==')
-VAPID_PUBLIC_KEY = os.getenv('BBNRtkB_vzJFu0ftQiZx-N1paaNPfdSqelZeS-s2YXCuBFEWoD0F_AVOCWcnjdZHHNoiwWB8Z5gicLmJx8Peqfs=')
-VAPID_CLAIMS = {
-    "sub": "mailto:mpc0679@gmail.com"
-}
+app.config['VAPID_PRIVATE_KEY'] = os.getenv('VAPID_PRIVATE_KEY', "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5...")
+app.config['VAPID_PUBLIC_KEY'] = os.getenv('VAPID_PUBLIC_KEY', "BBNRtkB_vzJFu0ftQiZx-N1paaNPfdSqelZeS-s2YXCu...")
+app.config['VAPID_CLAIMS'] = {"sub": "mailto:mpc0679@gmail.com"}
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -181,7 +179,7 @@ def index():
                           username=session.get('username'),
                           users=users,
                           conversations=conversation_data,
-                          vapid_public_key=VAPID_PUBLIC_KEY)
+                          vapid_public_key=app.config['VAPID_PUBLIC_KEY'])  # Fixed: using app.config
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -494,8 +492,8 @@ def send_push_notification(subscription_json, title, body, conversation_id):
         webpush(
             subscription_info=subscription,
             data=json.dumps(payload),
-            vapid_private_key=VAPID_PRIVATE_KEY,
-            vapid_claims=VAPID_CLAIMS
+            vapid_private_key=app.config['VAPID_PRIVATE_KEY'],  # Fixed: using app.config
+            vapid_claims=app.config['VAPID_CLAIMS']  # Fixed: using app.config
         )
     except WebPushException as e:
         print(f"Web push failed: {e}")
@@ -735,6 +733,30 @@ def serve_manifest():
 @app.route('/offline')
 def offline():
     return render_template('offline.html')
+
+@app.route('/chat/<int:conversation_id>')
+def chat(conversation_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user_id = session['user_id']
+    
+    # Verify user has access to this conversation
+    conversation = Conversation.query.get_or_404(conversation_id)
+    if user_id not in [conversation.user1_id, conversation.user2_id]:
+        abort(403)
+    
+    # Determine the other user
+    if conversation.user1_id == user_id:
+        other_user = User.query.get(conversation.user2_id)
+    else:
+        other_user = User.query.get(conversation.user1_id)
+    
+    return render_template('chat.html', 
+                         conversation=conversation,
+                         other_user=other_user,
+                         current_user=User.query.get(user_id),
+                         vapid_public_key=app.config['VAPID_PUBLIC_KEY'])  # Fixed: using app.config
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
