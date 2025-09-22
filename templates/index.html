@@ -1,82 +1,122 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <!-- App Launching Animation -->
-    <div id="app-launch" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #667eea; display: flex; justify-content: center; align-items: center; z-index: 9999;">
-        <div style="text-align: center; color: white;">
-            <div style="width: 80px; height: 80px; background: white; border-radius: 50%; margin: 0 auto 20px; display: flex; justify-content: center; align-items: center;">
-                <span style="font-size: 40px; color: #667eea; font-weight: bold;">M</span>
-            </div>
-            <h1 style="margin-bottom: 10px;">MugiChat</h1>
-            <p>Loading...</p>
+<!-- App Launching Animation -->
+<div id="app-launch" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #667eea; display: flex; justify-content: center; align-items: center; z-index: 9999;">
+    <div style="text-align: center; color: white;">
+        <div style="width: 80px; height: 80px; background: white; border-radius: 50%; margin: 0 auto 20px; display: flex; justify-content: center; align-items: center;">
+            <span style="font-size: 40px; color: #667eea; font-weight: bold;">M</span>
         </div>
+        <h1 style="margin-bottom: 10px;">MugiChat</h1>
+        <p>Loading<span class="bouncing-dots">
+            <span></span><span></span><span></span>
+        </span></p>
     </div>
+</div>
 
-    <!-- Chat List Template -->
-    <div id="chat-list-template">
-        <div class="chat-list-container">
-            <header class="chat-header">
-                <h1>MugiChat</h1>
-                <div class="user-info">
-                    <span id="welcome-user">Welcome, {{ username }}</span>
-                    <a href="{{ url_for('logout') }}" id="logout-btn" class="logout-btn">Logout</a>
-                    <button id="delete-account-btn" class="delete-btn">Delete Account</button>
-                </div>
-            </header>
-            
-            <div class="chat-list-content">
-                <div class="chat-list-header">
-                    <h2>Chats</h2>
-                    <p>The app by Mpc!</p>
-                    <button id="new-chat-btn" class="new-chat-btn">+ New Chat</button>
-                </div>
-                
-                <div class="users-panel" id="users-panel" style="display: none;">
-                    <div class="users-header">
-                        <button id="back-to-chats" class="back-btn">← Back</button>
-                        <h3>Select a user</h3>
-                    </div>
-                    <ul id="users-list">
-                        {% for user in users %}
-                        <li data-user-id="{{ user.id }}">
-                            <a href="#" class="user-item">
-                                <span class="user-avatar">{{ user.username[0].upper() }}</span>
-                                <span class="user-name">{{ user.username }}</span>
-                                <span class="user-status" data-user-id="{{ user.id }}"></span>
-                            </a>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-                
-                <div class="conversations-panel" id="conversations-panel">
-                    <ul id="conversations-list">
-                        {% for conversation in conversations %}
-                        <li data-conversation-id="{{ conversation.id }}" data-other-user-id="{{ conversation.other_user_id }}">
-                            <a href="{{ url_for('chat', conversation_id=conversation.id) }}" class="conversation-item">
-                                <span class="user-avatar">{{ conversation.other_username[0].upper() }}</span>
-                                <div class="conversation-info">
-                                    <span class="user-name">{{ conversation.other_username }}</span>
-                                    <span class="last-message">{{ conversation.last_message|truncate(20) if conversation.last_message else '' }}</span>
-                                </div>
-                                <div class="conversation-meta">
-                                    <span class="last-message-time">{{ conversation.last_message_time|format_time if conversation.last_message_time else '' }}</span>
-                                    {% if conversation.unread_count > 0 %}
-                                    <span class="unread-badge">{{ conversation.unread_count }}</span>
-                                    {% endif %}
-                                </div>
-                                <button class="delete-conversation-btn" data-conversation-id="{{ conversation.id }}">×</button>
-                            </a>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
+<style>
+.bouncing-dots { display: inline-flex; align-items: flex-end; margin-left: 5px; }
+.bouncing-dots span { width: 8px; height: 8px; margin: 0 3px; background: white; border-radius: 50%; display: inline-block; animation: bounce 0.6s infinite alternate; }
+.bouncing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.bouncing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0% { transform: translateY(0); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
+</style>
+
+<!-- Chat List Template -->
+<div id="chat-list-template" style="display:none;">
+    <header class="chat-header">
+        <h1>MugiChat</h1>
+        <div class="user-info">
+            <div class="current-user-profile">
+                {% if current_user and current_user.profile_picture %}
+                    <img src="{{ current_user.profile_picture }}" alt="Profile" class="profile-pic-small">
+                {% else %}
+                    <div class="default-avatar-small">{{ current_user.username[0].upper() if current_user else 'U' }}</div>
+                {% endif %}
+                <span id="welcome-user">Welcome, {{ username }}</span>
+            </div>
+            <div class="header-buttons">
+                <a href="{{ url_for('settings') }}" id="settings-btn" class="settings-btn" title="Settings">⚙️</a>
+                <a href="{{ url_for('logout') }}" id="logout-btn" class="logout-btn">Logout</a>
             </div>
         </div>
+    </header>
+
+    <div class="chat-list-content">
+        <div class="chat-list-header">
+            <h2>Chats</h2>
+            
+            <button id="new-chat-btn" class="new-chat-btn">+ New Chat</button>
+            <li><a href="{{ url_for('status_page') }}">Status</a></li>
+        </div>
+
+        <!-- Users Panel -->
+        <div class="users-panel" id="users-panel" style="display: none;">
+            <div class="users-header">
+                <button id="back-to-chats" class="back-btn">← Back</button>
+                <h3>Select a user</h3>
+            </div>
+            <ul id="users-list">
+                {% for user in users %}
+                <li data-user-id="{{ user.id }}">
+                    <a href="#" class="user-item">
+                        {% if user.profile_picture %}
+                            <img src="{{ user.profile_picture }}" alt="{{ user.username }}" class="user-avatar-img">
+                        {% else %}
+                            <span class="user-avatar">{{ user.username[0].upper() }}</span>
+                        {% endif %}
+                        <div class="user-info">
+                            <span class="user-name">{{ user.username }}</span>
+                            {% if user.bio %}
+                                <span class="user-bio">{{ user.bio }}</span>
+                            {% endif %}
+                        </div>
+                        <span class="user-status" data-user-id="{{ user.id }}"></span>
+                    </a>
+                </li>
+                
+                {% endfor %}
+            </ul>
+        </div>
+
+
+        
+
+        <!-- Conversations Panel -->
+        <div class="conversations-panel" id="conversations-panel">
+            <ul id="conversations-list">
+                {% for conversation in conversations %}
+                <li data-conversation-id="{{ conversation.id }}" data-other-user-id="{{ conversation.other_user_id }}">
+                    <a href="{{ url_for('chat', conversation_id=conversation.id) }}" class="conversation-item">
+                        {% if conversation.other_user_profile_picture %}
+                            <img src="{{ conversation.other_user_profile_picture }}" alt="{{ conversation.other_username }}" class="user-avatar-img">
+                        {% else %}
+                            <span class="user-avatar">{{ conversation.other_username[0].upper() }}</span>
+                        {% endif %}
+                        <div class="conversation-info">
+                            <span class="user-name">{{ conversation.other_username }}</span>
+                            <span class="last-message">{{ conversation.last_message|truncate(20) if conversation.last_message else '' }}</span>
+                            {% if conversation.other_user_bio %}
+                                <span class="user-bio">{{ conversation.other_user_bio }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="conversation-meta">
+                            <span class="last-message-time">{{ conversation.last_message_time|format_time if conversation.last_message_time else '' }}</span>
+                            {% if conversation.unread_count > 0 %}
+                                <span class="unread-badge">{{ conversation.unread_count }}</span>
+                            {% endif %}
+                        </div>
+                        <button class="delete-conversation-btn" data-conversation-id="{{ conversation.id }}">×</button>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
     </div>
-    
-    <!-- Hidden field for VAPID public key -->
-    <input type="hidden" id="vapid-public-key" value="{{ vapid_public_key }}">
+</div>
+
+<!-- Hidden field for VAPID public key -->
+<input type="hidden" id="vapid-public-key" value="{{ vapid_public_key }}">
 {% endblock %}
 
 {% block scripts %}
@@ -89,7 +129,7 @@
         
         // DOM elements
         const logoutBtn = document.getElementById('logout-btn');
-        const deleteAccountBtn = document.getElementById('delete-account-btn');
+        const settingsBtn = document.getElementById('settings-btn');
         const appLaunch = document.getElementById('app-launch');
         const chatListTemplate = document.getElementById('chat-list-template');
         const newChatBtn = document.getElementById('new-chat-btn');
@@ -119,12 +159,13 @@
             .then(data => {
                 if (data.authenticated) {
                     currentUserId = data.user_id;
+                    initializeSocketConnection();
                     loadUserStatuses();
                     
                     // Set up user and conversation click events
                     setupUserAndConversationEvents();
                     
-                    // Set up logout and delete account buttons
+                    // Set up logout and settings buttons
                     setupButtonEvents();
                     
                     // Initialize service worker for PWA
@@ -140,6 +181,131 @@
                 console.error('Auth check error:', error);
                 window.location.href = '/login';
             });
+        }
+        
+        function initializeSocketConnection() {
+            // Connect to Socket.IO
+            socket = io();
+            
+            // Listen for profile updates
+            socket.on('profile_updated', function(data) {
+                updateUserProfile(data);
+            });
+            
+            // Listen for user status changes
+            socket.on('user_status', function(data) {
+                if (userStatuses[data.user_id]) {
+                    userStatuses[data.user_id].status = data.status;
+                    updateUserStatusIndicator(data.user_id);
+                }
+            });
+            
+            // Listen for conversation updates
+            socket.on('update_conversation', function(data) {
+                updateConversationUI(data);
+            });
+        }
+        
+        function updateUserProfile(profileData) {
+            // Update the user's profile everywhere in the UI
+            const { user_id, username, profile_picture, bio } = profileData;
+            
+            // Update user statuses data
+            if (userStatuses[user_id]) {
+                userStatuses[user_id].username = username;
+                userStatuses[user_id].profile_picture = profile_picture;
+                userStatuses[user_id].bio = bio;
+            }
+            
+            // Update user list items
+            document.querySelectorAll(`[data-user-id="${user_id}"]`).forEach(item => {
+                const usernameElement = item.querySelector('.user-name');
+                const avatarElement = item.querySelector('.user-avatar, .user-avatar-img');
+                const bioElement = item.querySelector('.user-bio');
+                
+                if (usernameElement) usernameElement.textContent = username;
+                if (bioElement) bioElement.textContent = bio || '';
+                
+                // Update avatar
+                if (profile_picture) {
+                    if (avatarElement.classList.contains('user-avatar')) {
+                        // Replace text avatar with image
+                        const img = document.createElement('img');
+                        img.src = profile_picture;
+                        img.alt = username;
+                        img.className = 'user-avatar-img';
+                        avatarElement.replaceWith(img);
+                    } else if (avatarElement.classList.contains('user-avatar-img')) {
+                        // Update existing image
+                        avatarElement.src = profile_picture;
+                    }
+                }
+            });
+            
+            // Update conversation list items
+            document.querySelectorAll(`[data-other-user-id="${user_id}"]`).forEach(item => {
+                const usernameElement = item.querySelector('.user-name');
+                const avatarElement = item.querySelector('.user-avatar, .user-avatar-img');
+                const bioElement = item.querySelector('.user-bio');
+                
+                if (usernameElement) usernameElement.textContent = username;
+                if (bioElement) bioElement.textContent = bio || '';
+                
+                // Update avatar
+                if (profile_picture) {
+                    if (avatarElement.classList.contains('user-avatar')) {
+                        // Replace text avatar with image
+                        const img = document.createElement('img');
+                        img.src = profile_picture;
+                        img.alt = username;
+                        img.className = 'user-avatar-img';
+                        avatarElement.replaceWith(img);
+                    } else if (avatarElement.classList.contains('user-avatar-img')) {
+                        // Update existing image
+                        avatarElement.src = profile_picture;
+                    }
+                }
+            });
+            
+            // If it's the current user, update the welcome message and profile picture
+            if (user_id === currentUserId) {
+                const welcomeUser = document.getElementById('welcome-user');
+                if (welcomeUser) {
+                    welcomeUser.textContent = `Welcome, ${username}`;
+                }
+                
+                // Update current user's profile picture in header
+                const currentUserProfile = document.querySelector('.current-user-profile');
+                if (currentUserProfile) {
+                    const existingImg = currentUserProfile.querySelector('.profile-pic-small');
+                    const existingAvatar = currentUserProfile.querySelector('.default-avatar-small');
+                    
+                    if (profile_picture) {
+                        if (existingAvatar) {
+                            existingAvatar.remove();
+                        }
+                        if (existingImg) {
+                            existingImg.src = profile_picture;
+                        } else {
+                            const img = document.createElement('img');
+                            img.src = profile_picture;
+                            img.alt = 'Profile';
+                            img.className = 'profile-pic-small';
+                            currentUserProfile.insertBefore(img, currentUserProfile.firstChild);
+                        }
+                    } else {
+                        if (existingImg) {
+                            existingImg.remove();
+                        }
+                        if (!existingAvatar) {
+                            const avatar = document.createElement('div');
+                            avatar.className = 'default-avatar-small';
+                            avatar.textContent = username[0].toUpperCase();
+                            currentUserProfile.insertBefore(avatar, currentUserProfile.firstChild);
+                        }
+                    }
+                }
+            }
         }
         
         function loadUserStatuses() {
@@ -171,6 +337,108 @@
                 statusElement.className = `user-status ${status}`;
                 statusElement.title = status === 'online' ? 'Online' : 
                                     status === 'recently online' ? 'Recently online' : 'Offline';
+            }
+        }
+        
+        function updateConversationUI(conversationData) {
+            const { conversation_id, other_user_id, other_username, last_message, last_message_time, unread_count, other_user_profile_picture, other_user_bio } = conversationData;
+            
+            let conversationItem = document.querySelector(`[data-conversation-id="${conversation_id}"]`);
+            
+            if (!conversationItem) {
+                // Create new conversation item if it doesn't exist
+                conversationItem = document.createElement('li');
+                conversationItem.setAttribute('data-conversation-id', conversation_id);
+                conversationItem.setAttribute('data-other-user-id', other_user_id);
+                
+                const conversationLink = document.createElement('a');
+                conversationLink.href = `/chat/${conversation_id}`;
+                conversationLink.className = 'conversation-item';
+                
+                // Create avatar
+                let avatarHtml;
+                if (other_user_profile_picture) {
+                    avatarHtml = `<img src="${other_user_profile_picture}" alt="${other_username}" class="user-avatar-img">`;
+                } else {
+                    avatarHtml = `<span class="user-avatar">${other_username[0].toUpperCase()}</span>`;
+                }
+                
+                // Create conversation info
+                const conversationInfo = `
+                    <div class="conversation-info">
+                        <span class="user-name">${other_username}</span>
+                        <span class="last-message">${last_message ? last_message.substring(0, 20) + (last_message.length > 20 ? '...' : '') : ''}</span>
+                        ${other_user_bio ? `<span class="user-bio">${other_user_bio}</span>` : ''}
+                    </div>
+                    <div class="conversation-meta">
+                        <span class="last-message-time">${last_message_time ? new Date(last_message_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                        ${unread_count > 0 ? `<span class="unread-badge">${unread_count}</span>` : ''}
+                    </div>
+                    <button class="delete-conversation-btn" data-conversation-id="${conversation_id}">×</button>
+                `;
+                
+                conversationLink.innerHTML = avatarHtml + conversationInfo;
+                conversationItem.appendChild(conversationLink);
+                
+                // Add to conversations list
+                document.getElementById('conversations-list').appendChild(conversationItem);
+                
+                // Add delete event listener
+                conversationItem.querySelector('.delete-conversation-btn').addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    deleteConversation(conversation_id);
+                });
+            } else {
+                // Update existing conversation item
+                const usernameElement = conversationItem.querySelector('.user-name');
+                const lastMessageElement = conversationItem.querySelector('.last-message');
+                const lastMessageTimeElement = conversationItem.querySelector('.last-message-time');
+                const unreadBadgeElement = conversationItem.querySelector('.unread-badge');
+                const bioElement = conversationItem.querySelector('.user-bio');
+                const avatarElement = conversationItem.querySelector('.user-avatar, .user-avatar-img');
+                
+                if (usernameElement) usernameElement.textContent = other_username;
+                if (lastMessageElement) lastMessageElement.textContent = last_message ? last_message.substring(0, 20) + (last_message.length > 20 ? '...' : '') : '';
+                if (lastMessageTimeElement) lastMessageTimeElement.textContent = last_message_time ? new Date(last_message_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                
+                if (bioElement) {
+                    if (other_user_bio) {
+                        bioElement.textContent = other_user_bio;
+                        bioElement.style.display = 'block';
+                    } else {
+                        bioElement.style.display = 'none';
+                    }
+                }
+                
+                // Update unread badge
+                if (unread_count > 0) {
+                    if (!unreadBadgeElement) {
+                        const badge = document.createElement('span');
+                        badge.className = 'unread-badge';
+                        badge.textContent = unread_count;
+                        conversationItem.querySelector('.conversation-meta').appendChild(badge);
+                    } else {
+                        unreadBadgeElement.textContent = unread_count;
+                    }
+                } else if (unreadBadgeElement) {
+                    unreadBadgeElement.remove();
+                }
+                
+                // Update avatar
+                if (other_user_profile_picture) {
+                    if (avatarElement.classList.contains('user-avatar')) {
+                        // Replace text avatar with image
+                        const img = document.createElement('img');
+                        img.src = other_user_profile_picture;
+                        img.alt = other_username;
+                        img.className = 'user-avatar-img';
+                        avatarElement.replaceWith(img);
+                    } else if (avatarElement.classList.contains('user-avatar-img')) {
+                        // Update existing image
+                        avatarElement.src = other_user_profile_picture;
+                    }
+                }
             }
         }
         
@@ -221,27 +489,10 @@
                 });
             });
             
-            // Delete account button
-            deleteAccountBtn.addEventListener('click', function() {
-                if (confirm('Are you sure you want to delete your account? This will permanently delete all your messages and cannot be undone.')) {
-                    fetch('/delete_account', {
-                        method: 'POST',
-                        credentials: 'include'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('Account deleted successfully');
-                            window.location.href = '/login';
-                        } else {
-                            alert('Error deleting account: ' + data.error);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error deleting account:', error);
-                        alert('Error deleting account. Please try again.');
-                    });
-                }
+            // Settings button
+            settingsBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                window.location.href = '/settings';
             });
         }
         
@@ -345,4 +596,56 @@
             }, 3000);
         }
     </script>
+    
+    <style>
+        .current-user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .profile-pic-small {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        
+        .default-avatar-small {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .user-avatar-img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        
+        .user-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .user-bio {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        .conversation-info .user-bio {
+            font-size: 11px;
+            color: #888;
+        }
+    </style>
 {% endblock %}

@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#667eea">
     <meta name="description" content="A real-time messaging application with voice messages">
     <title>MugiChat </title>
-   
+    
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     
@@ -93,6 +93,30 @@
                 console.log('Running in standalone mode');
             }
         });
+
+        // Show launch animation if app opened from home screen (standalone)
+window.addEventListener('load', () => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const appLaunch = document.getElementById('app-launch');
+    const chatListTemplate = document.getElementById('chat-list-template');
+
+    if (isStandalone && appLaunch && chatListTemplate) {
+        chatListTemplate.style.display = 'none';
+        appLaunch.style.display = 'flex';
+        appLaunch.style.opacity = '1';
+
+        // Launch animation
+        setTimeout(() => {
+            appLaunch.style.transition = 'opacity 0.8s ease';
+            appLaunch.style.opacity = '0';
+            setTimeout(() => {
+                appLaunch.style.display = 'none';
+                chatListTemplate.style.display = 'block';
+            }, 800);
+        }, 2500); // 2.5 seconds splash
+    }
+});
+
     </script>
 </body>
 </html>

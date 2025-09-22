@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="terms-container">
+    <header class="terms-header">
+        <a href="{{ url_for('settings') }}" class="back-btn">← Back</a>
+        <h1>Terms & Conditions</h1>
+    </header>
+
+    <div class="terms-content">
+        <div class="terms-section">
+            <h2>1. Acceptance of Terms</h2>
+            <p>By accessing and using MugiChat, you accept and agree to be bound by the terms and provisions of this agreement.</p>
+        </div>
+
+        <div class="terms-section">
+            <h2>2. Use of Service</h2>
+            <p>MugiChat is intended for personal, non-commercial use. You agree not to use the service for any illegal purpose or in violation of any laws.</p>
+        </div>
+
+        <div class="terms-section">
+            <h2>3. User Accounts</h2>
+            <p>You are responsible for maintaining the confidentiality of your account and password. You agree to accept responsibility for all activities that occur under your account.</p>
+        </div>
+
+        <div class="terms-section">
+            <h2>4. Privacy</h2>
+            <p>Your privacy is important to us. We collect and use your personal information only as described in our Privacy Policy. We do not share your personal information with third parties without your consent.</p>
+        </div>
+
+        <div class="terms-section">
+            <h2>5. User Conduct</h2>
+            <p>You agree not to:</p>
+            <ul>
+                <li>Harass, abuse, or harm another person</li>
+                <li>Use the service for any illegal purpose</li>
+                <li>Upload or transmit viruses or any malicious code</li>
+                <li>Violate the privacy rights of others</li>
+                <li>Impersonate any person or entity</li>
+            </ul>
+        </div>
+
+        <div class="terms-section">
+            <h2>6. Intellectual Property</h2>
+            <p>All content included in MugiChat, such as text, graphics, logos, and software, is the property of MugiChat or its content suppliers and protected by international copyright laws.</p>
+        </div>
+
+        <div class="terms-section">
+            <h2>7. Termination</h2>
+            <p>We may terminate or suspend your account immediately, without prior notice, for conduct that we believe violates these Terms or is harmful to other users, us, or third parties.</p>
+        </div>
+
+        <div class="terms-section">
+            <h2>8. Limitation of Liability</h2>
+            <p>MugiChat shall not be liable for any indirect, incidental, special, consequential or punitive damages resulting from your use of or inability to use the service.</p>
+        </div>
+
+        <div class="terms-section">
+            <h2>9. Changes to Terms</h2>
+            <p>We reserve the right to modify these terms at any time. We will notify users of any changes by posting the new terms on this page.</p>
+        </div>
+
+        <div class="terms-section">
+            <h2>10. Contact Information</h2>
+            <p>If you have any questions about these Terms, please contact us at: mpc0679@gmail.com</p>
+        </div>
+
+        <div class="terms-footer">
+            <p><strong>Last updated:</strong> December 2024</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.terms-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: white;
+    min-height: 100vh;
+}
+
+.terms-header {
+    background: #667eea;
+    color: white;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.back-btn {
+    color: white;
+    text-decoration: none;
+    font-size: 18px;
+}
+
+.terms-header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.terms-content {
+    padding: 20px;
+}
+
+.terms-section {
+    margin-bottom: 25px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.terms-section h2 {
+    color: #667eea;
+    margin-bottom: 15px;
+    font-size: 18px;
+}
+
+.terms-section p {
+    line-height: 1.6;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.terms-section ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.terms-section li {
+    margin-bottom: 5px;
+    line-height: 1.5;
+}
+
+.terms-footer {
+    text-align: center;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+    color: #666;
+}
+</style>
+{% endblock %}

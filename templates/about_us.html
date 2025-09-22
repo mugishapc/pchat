@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="about-container">
+    <header class="about-header">
+        <a href="{{ url_for('settings') }}" class="back-btn">← Back</a>
+        <h1>About Us</h1>
+    </header>
+
+    <div class="about-content">
+        <div class="app-info">
+            <div class="app-icon">
+                <span>M</span>
+            </div>
+            <h2>MugiChat</h2>
+            <p class="version">Version 3.0.0</p>
+        </div>
+
+        <div class="about-section">
+            <h3>Welcome to MugiChat</h3>
+            <p>MugiChat is a modern, real-time messaging application that allows you to connect with friends and family instantly. Our mission is to provide a seamless and secure messaging experience.</p>
+        </div>
+
+        <div class="about-section">
+            <h3>Features</h3>
+            <ul class="features-list">
+                <li>Real-time messaging</li>
+                <li>Voice message recording</li>
+                <li>Online status indicators</li>
+                <li>Push notifications</li>
+                <li>Progressive Web App (PWA) support</li>
+                <li>Secure authentication</li>
+            </ul>
+        </div>
+
+        <div class="about-section">
+            <h3>Developer</h3>
+            <div class="developer-info">
+                <p><strong>Developed by:</strong> Mpc</p>
+                <p><strong>Email:</strong> mpc0679@gmail.com</p>
+                <p><strong>Mission:</strong> To create innovative and user-friendly applications that enhance communication.</p>
+            </div>
+        </div>
+
+        <div class="about-section">
+            <h3>Technology</h3>
+            <p>Built with modern web technologies including Flask, Socket.IO, and vanilla JavaScript. Designed to work seamlessly across all devices.</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.about-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: white;
+    min-height: 100vh;
+}
+
+.about-header {
+    background: #667eea;
+    color: white;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.back-btn {
+    color: white;
+    text-decoration: none;
+    font-size: 18px;
+}
+
+.about-header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.about-content {
+    padding: 20px;
+}
+
+.app-info {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.app-icon {
+    width: 80px;
+    height: 80px;
+    background: #667eea;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 36px;
+    font-weight: bold;
+    margin-bottom: 15px;
+}
+
+.app-info h2 {
+    margin: 0 0 5px 0;
+    color: #333;
+}
+
+.version {
+    margin: 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.about-section {
+    margin-bottom: 25px;
+    padding: 20px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.about-section h3 {
+    color: #667eea;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 10px;
+}
+
+.features-list {
+    list-style: none;
+    padding: 0;
+}
+
+.features-list li {
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+    position: relative;
+    padding-left: 20px;
+}
+
+.features-list li:before {
+    content: "✓";
+    color: #27ae60;
+    position: absolute;
+    left: 0;
+}
+
+.developer-info p {
+    margin: 10px 0;
+    line-height: 1.5;
+}
+</style>
+{% endblock %}

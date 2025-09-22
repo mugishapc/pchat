@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="settings-container">
+    <header class="settings-header">
+        <a href="{{ url_for('index') }}" class="back-btn">← Back</a>
+        <h1>Settings</h1>
+    </header>
+
+    <div class="settings-content">
+        <div class="user-profile-section">
+            <div class="profile-picture">
+                {% if user.profile_picture %}
+                    <img src="{{ user.profile_picture }}" alt="Profile Picture">
+                {% else %}
+                    <div class="default-avatar">{{ user.username[0].upper() }}</div>
+                {% endif %}
+            </div>
+            <div class="profile-info">
+                <h2>{{ user.username }}</h2>
+                {% if user.bio %}
+                    <p class="bio">{{ user.bio }}</p>
+                {% else %}
+                    <p class="bio no-bio">No bio yet</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="settings-options">
+            <div class="settings-section">
+                <h3>Account</h3>
+                <ul class="settings-list">
+                    <li>
+                        <a href="{{ url_for('edit_profile') }}" class="settings-item">
+                            <span class="icon">👤</span>
+                            <span>Edit Profile</span>
+                            <span class="arrow">›</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('logout') }}" class="settings-item">
+                            <span class="icon">🚪</span>
+                            <span>Logout</span>
+                            <span class="arrow">›</span>
+                        </a>
+                    </li>
+                    <li>
+                        <button class="settings-item delete-account-btn" onclick="confirmDeleteAccount()">
+                            <span class="icon">🗑️</span>
+                            <span>Delete Account</span>
+                            <span class="arrow">›</span>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="settings-section">
+                <h3>About</h3>
+                <ul class="settings-list">
+                    <li>
+                        <a href="{{ url_for('about_us') }}" class="settings-item">
+                            <span class="icon">ℹ️</span>
+                            <span>About Us</span>
+                            <span class="arrow">›</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('terms') }}" class="settings-item">
+                            <span class="icon">📄</span>
+                            <span>Terms & Conditions</span>
+                            <span class="arrow">›</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="settings-section">
+                <h3>App</h3>
+                <ul class="settings-list">
+                    <li class="settings-item">
+                        <span class="icon">📱</span>
+                        <span>Version 1.0.0</span>
+                    </li>
+                    <li class="settings-item">
+                        <span class="icon">👨‍💻</span>
+                        <span>Developed by Mpc</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmDeleteAccount() {
+    if (confirm('Are you sure you want to delete your account? This will permanently delete all your messages and cannot be undone.')) {
+        fetch('/delete_account', {
+            method: 'POST',
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Account deleted successfully');
+                window.location.href = '/login';
+            } else {
+                alert('Error deleting account: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting account:', error);
+            alert('Error deleting account. Please try again.');
+        });
+    }
+}
+</script>
+
+<style>
+.settings-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: white;
+    min-height: 100vh;
+}
+
+.settings-header {
+    background: #667eea;
+    color: white;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.back-btn {
+    color: white;
+    text-decoration: none;
+    font-size: 18px;
+}
+
+.settings-header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.settings-content {
+    padding: 20px;
+}
+
+.user-profile-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.profile-picture img, .default-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #667eea;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.profile-info h2 {
+    margin: 0 0 5px 0;
+    color: #333;
+}
+
+.bio {
+    margin: 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.no-bio {
+    font-style: italic;
+    color: #999;
+}
+
+.settings-section {
+    margin-bottom: 30px;
+}
+
+.settings-section h3 {
+    color: #667eea;
+    margin-bottom: 15px;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.settings-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.settings-item {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    text-decoration: none;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    transition: background 0.3s;
+    cursor: pointer;
+}
+
+.settings-item:hover {
+    background: #f8f9fa;
+}
+
+.settings-item:last-child {
+    border-bottom: none;
+}
+
+.icon {
+    margin-right: 15px;
+    font-size: 18px;
+}
+
+.arrow {
+    margin-left: auto;
+    color: #999;
+    font-size: 18px;
+}
+
+.delete-account-btn {
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    color: #e74c3c;
+}
+
+.delete-account-btn .icon {
+    color: #e74c3c;
+}
+</style>
+{% endblock %}

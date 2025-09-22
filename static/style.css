@@ -1284,3 +1284,477 @@ body.keyboard-visible {
 .mobile-input-focus #message-input {
     border: 2px solid var(--primary-green);
 }
+
+
+/* Add these styles to your existing CSS file */
+
+/* User activity indicator */
+.user-activity-indicator {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+    margin-left: 10px;
+    animation: fadeInOut 1.5s infinite;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+
+/* Typing indicator animation */
+.typing-indicator {
+    display: inline-flex;
+    align-items: center;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #666;
+    border-radius: 50%;
+    margin: 0 2px;
+    animation: typingAnimation 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingAnimation {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.6;
+    }
+    30% {
+        transform: translateY(-5px);
+        opacity: 1;
+    }
+}
+
+/* Recording indicator animation */
+.recording-indicator {
+    display: inline-flex;
+    align-items: center;
+    color: #e74c3c;
+}
+
+.recording-pulse {
+    width: 10px;
+    height: 10px;
+    background-color: #e74c3c;
+    border-radius: 50%;
+    margin-right: 5px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.7;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(0.8);
+        opacity: 0.7;
+    }
+}
+
+/* Message status indicators */
+.message-info {
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
+    font-size: 11px;
+    color: #999;
+}
+
+.timestamp {
+    margin-right: 5px;
+}
+
+.read-status {
+    color: #3498db;
+    font-size: 12px;
+}
+
+/* Audio message styling */
+.audio-message {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 18px;
+    max-width: 250px;
+}
+
+.audio-message audio {
+    width: 100%;
+    height: 40px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .user-activity-indicator {
+        font-size: 11px;
+        margin-left: 5px;
+    }
+    
+    .audio-message {
+        max-width: 200px;
+    }
+}
+
+/* Input focus states */
+.message-input:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+/* Button hover effects */
+.mic-btn:hover, .send-btn:hover {
+    background-color: #667eea;
+    color: white;
+}
+
+/* Animation for new messages */
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message {
+    animation: messageSlideIn 0.3s ease-out;
+}
+
+/* Status indicators */
+.chat-status {
+    font-size: 12px;
+    margin-left: 8px;
+}
+
+.chat-status.online {
+    color: #27ae60;
+}
+
+.chat-status.recently-online {
+    color: #f39c12;
+}
+
+.chat-status.offline {
+    color: #95a5a6;
+}
+
+/* Loading animation for app launch */
+@keyframes appLaunch {
+    0% { transform: scale(0.9); opacity: 0; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+#app-launch {
+    animation: appLaunch 1s ease-out;
+}
+
+/* Keyboard visibility for mobile */
+.keyboard-visible .chat-input-container {
+    padding-bottom: 300px; /* Adjust based on keyboard height */
+    transition: padding-bottom 0.3s ease;
+}
+
+/* Scrollbar styling */
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+
+
+/* Add these styles to your existing CSS file */
+
+/* User activity indicator */
+.user-activity-indicator {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+    margin-left: 10px;
+    animation: fadeInOut 1.5s infinite;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+
+/* Typing indicator animation */
+.typing-indicator {
+    display: inline-flex;
+    align-items: center;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #666;
+    border-radius: 50%;
+    margin: 0 2px;
+    animation: typingAnimation 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingAnimation {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.6;
+    }
+    30% {
+        transform: translateY(-5px);
+        opacity: 1;
+    }
+}
+
+/* Recording indicator animation */
+.recording-indicator {
+    display: inline-flex;
+    align-items: center;
+    color: #e74c3c;
+}
+
+.recording-pulse {
+    width: 10px;
+    height: 10px;
+    background-color: #e74c3c;
+    border-radius: 50%;
+    margin-right: 5px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.7;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(0.8);
+        opacity: 0.7;
+    }
+}
+
+/* Message status indicators */
+.message-info {
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
+    font-size: 11px;
+    color: #999;
+}
+
+.timestamp {
+    margin-right: 5px;
+}
+
+.read-status {
+    color: #3498db;
+    font-size: 12px;
+}
+
+/* Audio message styling */
+.audio-message {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 18px;
+    max-width: 250px;
+}
+
+.audio-message audio {
+    width: 100%;
+    height: 40px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .user-activity-indicator {
+        font-size: 11px;
+        margin-left: 5px;
+    }
+    
+    .audio-message {
+        max-width: 200px;
+    }
+}
+
+/* Input focus states */
+.message-input:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+/* Button hover effects */
+.mic-btn:hover, .send-btn:hover {
+    background-color: #667eea;
+    color: white;
+}
+
+/* Animation for new messages */
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message {
+    animation: messageSlideIn 0.3s ease-out;
+}
+
+/* Status indicators */
+.chat-status {
+    font-size: 12px;
+    margin-left: 8px;
+}
+
+.chat-status.online {
+    color: #27ae60;
+}
+
+.chat-status.recently-online {
+    color: #f39c12;
+}
+
+.chat-status.offline {
+    color: #95a5a6;
+}
+
+/* Loading animation for app launch */
+@keyframes appLaunch {
+    0% { transform: scale(0.9); opacity: 0; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+#app-launch {
+    animation: appLaunch 1s ease-out;
+}
+
+/* Keyboard visibility for mobile */
+.keyboard-visible .chat-input-container {
+    padding-bottom: 300px; /* Adjust based on keyboard height */
+    transition: padding-bottom 0.3s ease;
+}
+
+/* Scrollbar styling */
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+
+
+/* Settings Button Styles */
+.header-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.settings-btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    text-decoration: none;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 18px;
+    transition: background 0.3s;
+}
+
+.settings-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .settings-container,
+    .edit-profile-container,
+    .about-container,
+    .terms-container {
+        margin: 0;
+    }
+    
+    .settings-content,
+    .edit-profile-content,
+    .about-content,
+    .terms-content {
+        padding: 15px;
+    }
+}
+
+.status-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    background: #25D366;
+    border: 2px solid white;
+    border-radius: 50%;
+}

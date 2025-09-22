@@ -10,6 +10,7 @@
                     <h2 id="current-chat-with">Chat with {{ other_user.username }}</h2>
                     <span id="current-chat-status" class="chat-status"></span>
                 </div>
+                <div id="user-activity-indicator" class="user-activity-indicator" style="display: none;"></div>
                 <button id="delete-conversation-btn" class="delete-btn">Delete Chat</button>
             </header>
             
@@ -45,6 +46,7 @@
     <input type="hidden" id="vapid-public-key" value="{{ vapid_public_key }}">
     <input type="hidden" id="conversation-id" value="{{ conversation.id }}">
     <input type="hidden" id="other-user-id" value="{{ other_user.id }}">
+    <input type="hidden" id="other-username" value="{{ other_user.username }}">
 {% endblock %}
 
 {% block scripts %}
@@ -54,12 +56,15 @@
         let socket;
         let currentConversationId = document.getElementById('conversation-id').value;
         let currentOtherUserId = document.getElementById('other-user-id').value;
+        let currentOtherUsername = document.getElementById('other-username').value;
         let currentUserId = null;
         let currentUsername = '{{ current_user.username }}';
         let mediaRecorder;
         let audioChunks = [];
         let recordingTimer = null;
         let recordingSeconds = 0;
+        let typingTimer = null;
+        let typingIndicatorTimer = null;
         
         // DOM elements
         const chatMessages = document.getElementById('chat-messages');
@@ -71,6 +76,7 @@
         const recordingTimerEl = document.getElementById('recording-timer');
         const stopRecordingBtn = document.getElementById('stop-recording-btn');
         const deleteConversationBtn = document.getElementById('delete-conversation-btn');
+        const userActivityIndicator = document.getElementById('user-activity-indicator');
         
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', function() {
@@ -142,6 +148,18 @@
                 }
             });
             
+            socket.on('user_typing', function(data) {
+                if (data.conversation_id === currentConversationId && data.user_id == currentOtherUserId) {
+                    showUserActivityIndicator(data.is_typing ? 'typing' : null);
+                }
+            });
+            
+            socket.on('user_recording', function(data) {
+                if (data.conversation_id === currentConversationId && data.user_id == currentOtherUserId) {
+                    showUserActivityIndicator(data.is_recording ? 'recording' : null);
+                }
+            });
+            
             socket.on('disconnect', function() {
                 console.log('Disconnected from server');
             });
@@ -189,12 +207,14 @@
         }
         
         function loadUserStatus() {
-            fetch(`/user_status/${currentOtherUserId}`, {
+            fetch(`/users/status`, {
                 credentials: 'include'
             })
             .then(response => response.json())
             .then(data => {
-                updateChatStatusIndicator(data.status);
+                if (data[currentOtherUserId]) {
+                    updateChatStatusIndicator(data[currentOtherUserId].status);
+                }
             })
             .catch(error => {
                 console.error('Error loading user status:', error);
@@ -207,6 +227,29 @@
                 statusElement.textContent = status === 'online' ? 'online' : 
                                           status === 'recently online' ? 'recently online' : 'offline';
                 statusElement.className = `chat-status ${status}`;
+            }
+        }
+        
+        function showUserActivityIndicator(activityType) {
+            if (typingIndicatorTimer) {
+                clearTimeout(typingIndicatorTimer);
+            }
+            
+            if (activityType) {
+                if (activityType === 'typing') {
+                    userActivityIndicator.textContent = `${currentOtherUsername} is typing...`;
+                    userActivityIndicator.style.display = 'block';
+                } else if (activityType === 'recording') {
+                    userActivityIndicator.textContent = `${currentOtherUsername} is recording an audio message...`;
+                    userActivityIndicator.style.display = 'block';
+                }
+                
+                // Hide after 3 seconds if no further updates
+                typingIndicatorTimer = setTimeout(() => {
+                    userActivityIndicator.style.display = 'none';
+                }, 3000);
+            } else {
+                userActivityIndicator.style.display = 'none';
             }
         }
         
@@ -232,6 +275,27 @@
             messageInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     sendMessage();
+                }
+            });
+            
+            // Typing indicators
+            messageInput.addEventListener('input', function() {
+                // Notify others that user is typing
+                if (messageInput.value.length > 0) {
+                    socket.emit('typing_start', {conversation_id: currentConversationId});
+                    
+                    // Clear any existing timer
+                    if (typingTimer) {
+                        clearTimeout(typingTimer);
+                    }
+                    
+                    // Set timer to stop typing indicator after 1 second of inactivity
+                    typingTimer = setTimeout(() => {
+                        socket.emit('typing_stop', {conversation_id: currentConversationId});
+                    }, 1000);
+                } else {
+                    // Input is empty, stop typing indicator
+                    socket.emit('typing_stop', {conversation_id: currentConversationId});
                 }
             });
             
@@ -352,6 +416,9 @@
                     conversation_id: currentConversationId
                 });
                 messageInput.value = '';
+                
+                // Stop typing indicator
+                socket.emit('typing_stop', {conversation_id: currentConversationId});
             }
         }
         
@@ -360,6 +427,9 @@
                 alert("Your browser doesn't support audio recording");
                 return;
             }
+            
+            // Notify others that user is recording
+            socket.emit('recording_start', {conversation_id: currentConversationId});
             
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(stream => {
@@ -374,6 +444,9 @@
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                         sendAudioMessage(audioBlob);
                         resetRecordingUI();
+                        
+                        // Notify others that user stopped recording
+                        socket.emit('recording_stop', {conversation_id: currentConversationId});
                     };
                     
                     mediaRecorder.start();
@@ -382,6 +455,9 @@
                 .catch(error => {
                     console.error('Error accessing microphone:', error);
                     alert('Error accessing microphone. Please ensure you have granted permission.');
+                    
+                    // Notify others that user stopped recording (due to error)
+                    socket.emit('recording_stop', {conversation_id: currentConversationId});
                 });
         }
         

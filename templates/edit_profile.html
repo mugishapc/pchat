@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="edit-profile-container">
+    <header class="edit-profile-header">
+        <a href="{{ url_for('settings') }}" class="back-btn">← Back</a>
+        <h1>Edit Profile</h1>
+    </header>
+
+    <div class="edit-profile-content">
+        <form method="POST" enctype="multipart/form-data" class="profile-form" id="profile-form">
+            <div class="form-section">
+                <label class="form-label">Profile Picture</label>
+                <div class="profile-picture-upload">
+                    <div class="current-picture">
+                        {% if user.profile_picture %}
+                            <img src="{{ url_for('static', filename=user.profile_picture) }}" alt="Current Profile Picture" id="current-profile-pic">
+
+                        {% else %}
+                            <div class="default-avatar" id="default-avatar">{{ user.username[0].upper() }}</div>
+                        {% endif %}
+                    </div>
+                    <input type="file" name="profile_picture" accept="image/*" class="file-input" id="profile-picture-input">
+                    <button type="button" class="upload-btn" onclick="document.getElementById('profile-picture-input').click()">Change Picture</button>
+                    <button type="button" class="remove-btn" id="remove-picture-btn" {% if not user.profile_picture %}style="display:none"{% endif %}>Remove Picture</button>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" id="username" name="username" value="{{ user.username }}" class="form-input" required>
+            </div>
+
+            <div class="form-section">
+                <label for="bio" class="form-label">Bio</label>
+                <textarea id="bio" name="bio" class="form-textarea" placeholder="Tell something about yourself...">{{ user.bio or '' }}</textarea>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="save-btn">Save Changes</button>
+                <a href="{{ url_for('settings') }}" class="cancel-btn">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.edit-profile-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: white;
+    min-height: 100vh;
+}
+
+.edit-profile-header {
+    background: #667eea;
+    color: white;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.back-btn {
+    color: white;
+    text-decoration: none;
+    font-size: 18px;
+}
+
+.edit-profile-header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.edit-profile-content {
+    padding: 20px;
+}
+
+.profile-form {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.form-section {
+    margin-bottom: 25px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #333;
+}
+
+.profile-picture-upload {
+    text-align: center;
+}
+
+.current-picture img, .default-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: #667eea;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 36px;
+    font-weight: bold;
+    margin-bottom: 15px;
+}
+
+.file-input {
+    display: none;
+}
+
+.upload-btn, .remove-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    margin: 5px;
+}
+
+.remove-btn {
+    background: #e74c3c;
+}
+
+.upload-btn:hover {
+    background: #5a6fd8;
+}
+
+.remove-btn:hover {
+    background: #c0392b;
+}
+
+.form-input, .form-textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.form-textarea {
+    height: 100px;
+    resize: vertical;
+}
+
+.form-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.save-btn {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    flex: 1;
+}
+
+.cancel-btn {
+    background: #95a5a6;
+    color: white;
+    text-decoration: none;
+    padding: 12px 30px;
+    border-radius: 5px;
+    text-align: center;
+    font-size: 16px;
+    flex: 1;
+}
+
+.save-btn:hover {
+    background: #5a6fd8;
+}
+
+.cancel-btn:hover {
+    background: #7f8c8d;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const profilePictureInput = document.getElementById('profile-picture-input');
+    const currentProfilePic = document.getElementById('current-profile-pic');
+    const defaultAvatar = document.getElementById('default-avatar');
+    const removePictureBtn = document.getElementById('remove-picture-btn');
+    const usernameInput = document.getElementById('username');
+
+    // Handle profile picture preview
+    profilePictureInput.addEventListener('change', function(e) {
+        if (this.files && this.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                if (currentProfilePic) {
+                    currentProfilePic.src = e.target.result;
+                    currentProfilePic.style.display = 'block';
+                } else {
+                    const img = document.createElement('img');
+                    img.id = 'current-profile-pic';
+                    img.src = e.target.result;
+                    img.alt = 'Current Profile Picture';
+                    img.style.width = '100px';
+                    img.style.height = '100px';
+                    img.style.borderRadius = '50%';
+                    img.style.objectFit = 'cover';
+                    document.querySelector('.current-picture').appendChild(img);
+                }
+                if (defaultAvatar) defaultAvatar.style.display = 'none';
+                removePictureBtn.style.display = 'inline-block';
+            }
+            reader.readAsDataURL(this.files[0]);
+        }
+    });
+
+    // Remove picture
+    removePictureBtn.addEventListener('click', function() {
+        profilePictureInput.value = '';
+        if (currentProfilePic) currentProfilePic.style.display = 'none';
+        if (defaultAvatar) {
+            defaultAvatar.style.display = 'flex';
+            defaultAvatar.textContent = usernameInput.value ? usernameInput.value[0].toUpperCase() : 'U';
+        }
+        this.style.display = 'none';
+    });
+
+    // Update default avatar when username changes
+    usernameInput.addEventListener('input', function() {
+        if (defaultAvatar && (!currentProfilePic || currentProfilePic.style.display === 'none')) {
+            defaultAvatar.textContent = this.value ? this.value[0].toUpperCase() : 'U';
+        }
+    });
+
+    // Submit form with feedback
+    const profileForm = document.getElementById('profile-form');
+    profileForm.addEventListener('submit', function(e) {
+        const saveBtn = this.querySelector('.save-btn');
+        const originalText = saveBtn.textContent;
+        saveBtn.textContent = 'Saving...';
+        saveBtn.disabled = true;
+    });
+});
+</script>
+{% endblock %}

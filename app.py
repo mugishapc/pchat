@@ -15,6 +15,9 @@ from flask_migrate import Migrate
 import json
 from pywebpush import webpush, WebPushException
 import time
+from werkzeug.utils import secure_filename
+from flask import send_from_directory
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -34,6 +37,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['VAPID_PRIVATE_KEY'] = os.getenv('VAPID_PRIVATE_KEY', "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JR0hBZ0VBTUJNR0J5...")
 app.config['VAPID_PUBLIC_KEY'] = os.getenv('VAPID_PUBLIC_KEY', "BBNRtkB_vzJFu0ftQiZx-N1paaNPfdSqelZeS-s2YXCu...")
 app.config['VAPID_CLAIMS'] = {"sub": "mailto:mpc0679@gmail.com"}
+app.config["UPLOAD_FOLDER"] = os.path.join(os.getcwd(), "static/uploads")
+
+# Ensure upload folder exists
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -47,6 +54,10 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 online_users = {}
 last_activity_times = {}
 
+# Track typing status and audio recording status
+typing_users = {}
+recording_users = {}
+
 # Models
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -54,7 +65,9 @@ class User(db.Model):
     password_hash = db.Column(db.String(120), nullable=False)
     push_subscription = db.Column(db.Text, nullable=True)
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
-    
+    profile_picture = db.Column(db.String(255), nullable=True)  # file path only
+    bio = db.Column(db.String(200), nullable=True)
+
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
     
@@ -73,6 +86,30 @@ class User(db.Model):
             return "recently online"
         
         return "offline"
+    
+    def get_profile_picture_url(self):
+        if self.profile_picture:
+            # Ensure the URL starts with static/ if it's a relative path
+            if self.profile_picture.startswith('uploads/'):
+                return f"/static/{self.profile_picture}"
+            elif not self.profile_picture.startswith(('http://', 'https://', '/static/')):
+                return f"/static/uploads/{self.profile_picture}"
+            return self.profile_picture
+        return None
+    
+    def has_active_status(self):
+        from datetime import datetime
+        return Status.query.filter(
+            Status.user_id == self.id,
+            Status.expires_at > datetime.utcnow()
+        ).first() is not None
+    
+    def get_active_status(self):
+        from datetime import datetime
+        return Status.query.filter(
+            Status.user_id == self.id,
+            Status.expires_at > datetime.utcnow()
+        ).first()
 
 class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -119,6 +156,32 @@ class Message(db.Model):
     is_deleted = db.Column(db.Boolean, default=False)
     
     user = db.relationship('User', backref=db.backref('messages', lazy=True))
+
+
+# Add this to your existing models (after User model)
+class Status(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)  # text status or image path
+    status_type = db.Column(db.String(20), default='text')  # 'text' or 'image'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    
+    user = db.relationship('User', backref=db.backref('statuses', lazy=True))
+    
+    def is_expired(self):
+        return datetime.utcnow() > self.expires_at
+
+class StatusViewer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    status_id = db.Column(db.Integer, db.ForeignKey('status.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    viewed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    status = db.relationship('Status', backref=db.backref('viewers', lazy=True))
+    user = db.relationship('User', backref=db.backref('viewed_statuses', lazy=True))
+
+
 
 # Create database tables
 with app.app_context():
@@ -172,14 +235,20 @@ def index():
             'other_username': other_user.username,
             'last_message': conv.last_message.content if conv.last_message and not conv.last_message.is_deleted else None,
             'last_message_time': conv.last_message.timestamp if conv.last_message and not conv.last_message.is_deleted else None,
-            'unread_count': unread_count
+            'unread_count': unread_count,
+            'other_user_profile_picture': other_user.get_profile_picture_url(),
+            'other_user_bio': other_user.bio
         })
+    
+    # Get current user data
+    current_user = User.query.get(session['user_id'])
     
     return render_template('index.html', 
                           username=session.get('username'),
                           users=users,
                           conversations=conversation_data,
-                          vapid_public_key=app.config['VAPID_PUBLIC_KEY'])  # Fixed: using app.config
+                          current_user=current_user,
+                          vapid_public_key=app.config['VAPID_PUBLIC_KEY'])
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -237,9 +306,88 @@ def logout():
             del online_users[user_id]
         if user_id in last_activity_times:
             del last_activity_times[user_id]
+        if user_id in typing_users:
+            del typing_users[user_id]
+        if user_id in recording_users:
+            del recording_users[user_id]
     
     session.clear()
     return redirect(url_for('login'))
+
+# Settings routes - FIXED: Moved these BEFORE the catch-all route
+@app.route('/settings')
+def settings():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    return render_template('settings.html', user=user, username=session.get('username'))
+
+
+@app.route('/edit_profile', methods=['GET', 'POST'])
+def edit_profile():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        bio = request.form.get('bio', '').strip()
+        
+        # Check if username is taken by another user
+        if username != user.username and User.query.filter_by(username=username).first():
+            flash('Username already exists', 'error')
+            return render_template('edit_profile.html', user=user)
+        
+        user.username = username
+        user.bio = bio
+        
+        # Handle profile picture upload
+        if 'profile_picture' in request.files:
+            profile_pic = request.files['profile_picture']
+            if profile_pic and profile_pic.filename != '':
+                # Generate unique filename
+                timestamp = int(time.time())
+                filename = secure_filename(profile_pic.filename)
+                filename = f"{timestamp}_{filename}"
+                filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                profile_pic.save(filepath)
+                user.profile_picture = f"uploads/{filename}"  # store only relative path
+        
+        db.session.commit()
+        session['username'] = username
+        
+        # Broadcast profile update to ALL connected clients
+        socketio.emit('profile_updated', {
+            'user_id': user.id,
+            'username': user.username,
+            'profile_picture': user.get_profile_picture_url(),
+            'bio': user.bio
+        })
+        
+        flash('Profile updated successfully', 'success')
+        return redirect(url_for('settings'))
+    
+    return render_template('edit_profile.html', user=user)
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+
+@app.route('/about_us')
+def about_us():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('about_us.html', username=session.get('username'))
+
+@app.route('/terms')
+def terms():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('terms.html', username=session.get('username'))
 
 # API routes
 @app.route('/messages/<int:conversation_id>')
@@ -272,7 +420,8 @@ def get_messages(conversation_id):
             'username': msg.user.username,
             'user_id': msg.user_id,
             'timestamp': msg.timestamp.isoformat(),
-            'is_read': msg.is_read
+            'is_read': msg.is_read,
+            'user_profile_picture': msg.user.get_profile_picture_url()
         })
     
     return jsonify(message_list)
@@ -398,7 +547,8 @@ def upload_audio(conversation_id):
         'user_id': session['user_id'],
         'timestamp': message.timestamp.isoformat(),
         'conversation_id': conversation_id,
-        'is_read': message.is_read
+        'is_read': message.is_read,
+        'user_profile_picture': User.query.get(session['user_id']).get_profile_picture_url()
     }, room=f'conversation_{conversation_id}')
     
     # Update conversation list for both users
@@ -432,7 +582,9 @@ def update_conversation_list(conversation, user_id):
         'other_username': other_user.username,
         'last_message': conversation.last_message.content if conversation.last_message and not conversation.last_message.is_deleted else None,
         'last_message_time': conversation.last_message.timestamp.isoformat() if conversation.last_message and not conversation.last_message.is_deleted else None,
-        'unread_count': unread_count
+        'unread_count': unread_count,
+        'other_user_profile_picture': other_user.get_profile_picture_url(),
+        'other_user_bio': other_user.bio
     }, room=f'user_{user_id}')
 
 # Save push subscription
@@ -466,10 +618,32 @@ def get_users_status():
         status_data[user.id] = {
             'online': user.is_online(),
             'status': user.get_status(),
-            'last_seen': user.last_seen.isoformat() if user.last_seen else None
+            'last_seen': user.last_seen.isoformat() if user.last_seen else None,
+            'username': user.username,
+            'profile_picture': user.get_profile_picture_url(),
+            'bio': user.bio
         }
     
     return jsonify(status_data)
+
+# Get user profile data
+@app.route('/user/profile/<int:user_id>')
+def get_user_profile(user_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    return jsonify({
+        'id': user.id,
+        'username': user.username,
+        'profile_picture': user.get_profile_picture_url(),
+        'bio': user.bio,
+        'status': user.get_status(),
+        'last_seen': user.last_seen.isoformat() if user.last_seen else None
+    })
 
 # Send push notification function
 def send_push_notification(subscription_json, title, body, conversation_id):
@@ -492,8 +666,8 @@ def send_push_notification(subscription_json, title, body, conversation_id):
         webpush(
             subscription_info=subscription,
             data=json.dumps(payload),
-            vapid_private_key=app.config['VAPID_PRIVATE_KEY'],  # Fixed: using app.config
-            vapid_claims=app.config['VAPID_CLAIMS']  # Fixed: using app.config
+            vapid_private_key=app.config['VAPID_PRIVATE_KEY'],
+            vapid_claims=app.config['VAPID_CLAIMS']
         )
     except WebPushException as e:
         print(f"Web push failed: {e}")
@@ -503,10 +677,13 @@ def send_push_notification(subscription_json, title, body, conversation_id):
         print(f"Error sending push notification: {e}")
 
 # SocketIO events
+
+
 @socketio.on('connect')
 def handle_connect():
     if 'user_id' in session:
         user_id = session['user_id']
+
         # Join user's personal room for notifications
         join_room(f'user_{user_id}')
         
@@ -523,7 +700,35 @@ def handle_connect():
             'status': 'online'
         }, broadcast=True)
         
+        # Check and emit active status
+        active_status = Status.query.filter(
+            Status.user_id == user_id,
+            Status.expires_at > datetime.utcnow()
+        ).first()
+        
+        if active_status:
+            emit('status_updated', {
+                'user_id': user_id,
+                'username': session['username'],
+                'has_status': True,
+                'status_type': active_status.status_type
+            }, broadcast=True)
+        
+        # Emit connected confirmation
         emit('connected', {'status': 'connected'})
+        
+        # Schedule delayed offline check
+        def delayed_offline():
+            time.sleep(5)  # Wait 5 seconds
+            if user_id not in online_users:  # If user didn't reconnect
+                socketio.emit(
+                    'user_status',
+                    {'user_id': user_id, 'status': 'offline'},
+                    namespace='/',
+                    room=None
+                )
+        
+        socketio.start_background_task(delayed_offline)
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -531,6 +736,10 @@ def handle_disconnect():
         user_id = session['user_id']
         if user_id in online_users:
             del online_users[user_id]
+        if user_id in typing_users:
+            del typing_users[user_id]
+        if user_id in recording_users:
+            del recording_users[user_id]
 
         # Notify all users about offline status change after a delay
         def delayed_offline():
@@ -540,8 +749,8 @@ def handle_disconnect():
                 socketio.emit(
                     'user_status',
                     {'user_id': user_id, 'status': 'offline'},
-                    namespace='/',  # default namespace
-                    room=None       # None = send to all clients
+                    namespace='/',
+                    room=None
                 )
 
         # Start the background task using Eventlet
@@ -585,6 +794,114 @@ def handle_leave_conversation(data):
     leave_room(f'conversation_{conversation_id}')
     emit('left_conversation', {'conversation_id': conversation_id})
 
+@socketio.on('typing_start')
+def handle_typing_start(data):
+    if 'user_id' not in session:
+        return
+    
+    conversation_id = data.get('conversation_id')
+    if not conversation_id:
+        return
+    
+    # Check if user is part of this conversation
+    conversation = db.session.get(Conversation, conversation_id)
+    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+        return
+    
+    # Store typing status
+    typing_users[session['user_id']] = {
+        'conversation_id': conversation_id,
+        'timestamp': time.time()
+    }
+    
+    # Notify other users in the conversation
+    emit('user_typing', {
+        'user_id': session['user_id'],
+        'username': session['username'],
+        'conversation_id': conversation_id,
+        'is_typing': True
+    }, room=f'conversation_{conversation_id}', include_self=False)
+
+@socketio.on('typing_stop')
+def handle_typing_stop(data):
+    if 'user_id' not in session:
+        return
+    
+    conversation_id = data.get('conversation_id')
+    if not conversation_id:
+        return
+    
+    # Check if user is part of this conversation
+    conversation = db.session.get(Conversation, conversation_id)
+    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+        return
+    
+    # Remove typing status
+    if session['user_id'] in typing_users:
+        del typing_users[session['user_id']]
+    
+    # Notify other users in the conversation
+    emit('user_typing', {
+        'user_id': session['user_id'],
+        'username': session['username'],
+        'conversation_id': conversation_id,
+        'is_typing': False
+    }, room=f'conversation_{conversation_id}', include_self=False)
+
+@socketio.on('recording_start')
+def handle_recording_start(data):
+    if 'user_id' not in session:
+        return
+    
+    conversation_id = data.get('conversation_id')
+    if not conversation_id:
+        return
+    
+    # Check if user is part of this conversation
+    conversation = db.session.get(Conversation, conversation_id)
+    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+        return
+    
+    # Store recording status
+    recording_users[session['user_id']] = {
+        'conversation_id': conversation_id,
+        'timestamp': time.time()
+    }
+    
+    # Notify other users in the conversation
+    emit('user_recording', {
+        'user_id': session['user_id'],
+        'username': session['username'],
+        'conversation_id': conversation_id,
+        'is_recording': True
+    }, room=f'conversation_{conversation_id}', include_self=False)
+
+@socketio.on('recording_stop')
+def handle_recording_stop(data):
+    if 'user_id' not in session:
+        return
+    
+    conversation_id = data.get('conversation_id')
+    if not conversation_id:
+        return
+    
+    # Check if user is part of this conversation
+    conversation = db.session.get(Conversation, conversation_id)
+    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+        return
+    
+    # Remove recording status
+    if session['user_id'] in recording_users:
+        del recording_users[session['user_id']]
+    
+    # Notify other users in the conversation
+    emit('user_recording', {
+        'user_id': session['user_id'],
+        'username': session['username'],
+        'conversation_id': conversation_id,
+        'is_recording': False
+    }, room=f'conversation_{conversation_id}', include_self=False)
+
 @socketio.on('send_message')
 def handle_message(data):
     if 'user_id' not in session:
@@ -600,6 +917,17 @@ def handle_message(data):
     conversation = db.session.get(Conversation, conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
+    
+    # Remove typing status if it exists
+    if session['user_id'] in typing_users:
+        del typing_users[session['user_id']]
+        # Notify other users that typing has stopped
+        emit('user_typing', {
+            'user_id': session['user_id'],
+            'username': session['username'],
+            'conversation_id': conversation_id,
+            'is_typing': False
+        }, room=f'conversation_{conversation_id}', include_self=False)
     
     # Get the other user in the conversation
     other_user = conversation.user1 if conversation.user1_id != session['user_id'] else conversation.user2
@@ -622,6 +950,9 @@ def handle_message(data):
     
     db.session.commit()
     
+    # Get current user's profile picture
+    current_user = User.query.get(session['user_id'])
+    
     # Broadcast to conversation room
     emit('new_message', {
         'id': message.id,
@@ -631,7 +962,8 @@ def handle_message(data):
         'user_id': session['user_id'],
         'timestamp': message.timestamp.isoformat(),
         'conversation_id': conversation_id,
-        'is_read': message.is_read
+        'is_read': message.is_read,
+        'user_profile_picture': current_user.get_profile_picture_url()
     }, room=f'conversation_{conversation_id}')
     
     # Update conversation list for both users
@@ -669,13 +1001,22 @@ def handle_message_deleted(data):
         'conversation_id': conversation_id
     }, room=f'conversation_{conversation_id}')
 
+# Handle profile updates
+@socketio.on('profile_updated')
+def handle_profile_updated(data):
+    # This will broadcast the profile update to all connected clients
+    emit('profile_updated', data, broadcast=True)
+
 @app.route('/check_auth')
 def check_auth():
     if 'user_id' in session:
+        user = User.query.get(session['user_id'])
         return jsonify({
             'authenticated': True,
             'user_id': session['user_id'],
-            'username': session.get('username', '')
+            'username': session.get('username', ''),
+            'profile_picture': user.get_profile_picture_url() if user else None,
+            'bio': user.bio if user else None
         })
     else:
         return jsonify({'authenticated': False})
@@ -756,7 +1097,216 @@ def chat(conversation_id):
                          conversation=conversation,
                          other_user=other_user,
                          current_user=User.query.get(user_id),
-                         vapid_public_key=app.config['VAPID_PUBLIC_KEY'])  # Fixed: using app.config
+                         vapid_public_key=app.config['VAPID_PUBLIC_KEY'])
+
+# FIXED: This catch-all route should be the VERY LAST route
+@app.route('/<path:path>')
+def catch_all(path):
+    known_routes = ['login', 'register', 'chat', 'offline', 'settings', 'edit_profile', 'about_us', 'terms']
+    if path in known_routes:
+        return redirect(url_for(path))
+    return render_template('base.html')
+
+
+# Status routes
+
+@app.route('/status')
+def status_page():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Get current user
+    current_user = User.query.get(session['user_id'])
+    current_time = datetime.utcnow()
+    
+    # Get all users who have active statuses (except current user)
+    users_with_status = User.query.filter(
+        User.id != session['user_id']
+    ).all()
+    
+    # Filter users who have active statuses
+    users_with_active_status = []
+    for user in users_with_status:
+        active_status = Status.query.filter(
+            Status.user_id == user.id,
+            Status.expires_at > current_time
+        ).first()
+        if active_status:
+            users_with_active_status.append(user)
+    
+    # Get current user's active status
+    current_user_status = Status.query.filter(
+        Status.user_id == session['user_id'],
+        Status.expires_at > current_time
+    ).order_by(Status.created_at.desc()).first()
+    
+    # Get viewed statuses for current user
+    viewed_status_ids = []
+    if current_user:
+        viewed_statuses = StatusViewer.query.filter_by(user_id=current_user.id).all()
+        viewed_status_ids = [sv.status_id for sv in viewed_statuses]
+    
+    return render_template('status.html', 
+                         username=session.get('username'),
+                         current_user=current_user,
+                         users_with_status=users_with_active_status,
+                         current_user_status=current_user_status,
+                         viewed_status_ids=viewed_status_ids,
+                         current_time=current_time)
+
+
+
+# Status upload route - ONLY ONE FUNCTION WITH THIS NAME
+@app.route('/status/upload', methods=['POST'])
+def upload_status():
+    try:
+        if 'user_id' not in session:
+            return jsonify({'error': 'Not authenticated'}), 401
+
+        status_type = request.form.get('type', 'text')
+        content = request.form.get('content', '').strip()
+
+        if not content:
+            return jsonify({'error': 'Status content is required'}), 400
+
+        # Delete existing status
+        Status.query.filter_by(user_id=session['user_id']).delete()
+
+        expires_at = datetime.utcnow() + timedelta(hours=24)
+
+        if status_type == 'image':
+            if 'image' not in request.files:
+                return jsonify({'error': 'No image file provided'}), 400
+
+            image_file = request.files['image']
+            if image_file and image_file.filename != '':
+                timestamp = int(time.time())
+                filename = secure_filename(image_file.filename)
+                filename = f"status_{timestamp}_{filename}"
+                filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                image_file.save(filepath)
+                content = f"uploads/{filename}"
+
+        status = Status(
+            user_id=session['user_id'],
+            content=content,
+            status_type=status_type,
+            expires_at=expires_at
+        )
+
+        db.session.add(status)
+        db.session.commit()
+
+        socketio.emit('status_updated', {
+            'user_id': session['user_id'],
+            'username': session.get('username'),
+            'has_status': True,
+            'status_type': status_type
+        }, broadcast=True)
+
+        return jsonify({'success': True, 'status_id': status.id})
+
+    except Exception as e:
+        # Return JSON even on error
+        return jsonify({'error': str(e)}), 500
+
+
+
+@app.route('/status/viewers/<int:status_id>')
+def get_status_viewers(status_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    status = Status.query.get_or_404(status_id)
+    
+    # Check if current user owns the status
+    if status.user_id != session['user_id']:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    viewers = []
+    for viewer in status.viewers:
+        viewers.append({
+            'username': viewer.user.username,
+            'profile_picture': viewer.user.get_profile_picture_url(),
+            'viewed_at': viewer.viewed_at.isoformat()
+        })
+    
+    return jsonify(viewers)
+
+@app.route('/status/delete', methods=['POST'])
+def delete_status():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    try:
+        # Delete user's status
+        Status.query.filter_by(user_id=session['user_id']).delete()
+        db.session.commit()
+        
+        # Broadcast status removal
+        socketio.emit('status_updated', {
+            'user_id': session['user_id'],
+            'username': session['username'],
+            'has_status': False
+        }, broadcast=True)
+        
+        return jsonify({'success': True})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/status/user/<int:user_id>')
+def get_user_status(user_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    # Get active status for the user
+    status = Status.query.filter(
+        Status.user_id == user_id,
+        Status.expires_at > datetime.utcnow()
+    ).order_by(Status.created_at.desc()).first()
+    
+    if not status:
+        return jsonify({'error': 'No active status'}), 404
+    
+    # Check if current user has viewed this status
+    has_viewed = StatusViewer.query.filter_by(
+        status_id=status.id,
+        user_id=session['user_id']
+    ).first() is not None
+    
+    # Mark as viewed if not already viewed
+    if not has_viewed:
+        viewer = StatusViewer(
+            status_id=status.id,
+            user_id=session['user_id']
+        )
+        db.session.add(viewer)
+        db.session.commit()
+        has_viewed = True  # Update after adding
+    
+    status_data = {
+        'id': status.id,
+        'content': status.content,
+        'type': status.status_type,
+        'created_at': status.created_at.isoformat(),
+        'expires_at': status.expires_at.isoformat(),
+        'user': {
+            'id': status.user.id,
+            'username': status.user.username,
+            'profile_picture': status.user.get_profile_picture_url()
+        },
+        'has_viewed': has_viewed,
+        'viewer_count': StatusViewer.query.filter_by(status_id=status.id).count()
+    }
+    
+    # If it's an image status, provide the full URL
+    if status.status_type == 'image' and status.content.startswith('uploads/'):
+        status_data['content_url'] = f"/static/{status.content}"
+    
+    return jsonify(status_data)
+
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)

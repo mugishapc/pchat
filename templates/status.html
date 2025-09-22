@@ -1,0 +1,476 @@
+{% extends "base.html" %}
+
+{% block title %}Status - WhatsApp Clone{% endblock %}
+
+{% block content %}
+<div class="status-container">
+    <div class="status-header">
+        <a href="{{ url_for('index') }}" class="back-button">←</a>
+        <h2>Status</h2>
+    </div>
+
+    <!-- My Status -->
+    <div class="status-section">
+        <h3>My Status</h3>
+        <div class="my-status">
+            {% if current_user_status %}
+            <div class="status-item active">
+                <div class="status-avatar">
+                    <img src="{{ current_user.get_profile_picture_url() or '/static/images/default-avatar.png' }}" 
+                         alt="{{ current_user.username }}">
+                    <div class="status-indicator my-status"></div>
+                </div>
+                <div class="status-info">
+                    <strong>My Status</strong>
+                    <span class="status-time">
+                        Expires {{ current_user_status.expires_at.strftime('%H:%M') }}
+                    </span>
+                </div>
+                <button class="delete-status-btn" onclick="deleteStatus()">×</button>
+            </div>
+            {% else %}
+            <div class="add-status" onclick="openStatusModal()">
+                <div class="status-avatar">
+                    <img src="{{ current_user.get_profile_picture_url() or '/static/images/default-avatar.png' }}" 
+                         alt="{{ current_user.username }}">
+                    <div class="add-status-icon">+</div>
+                </div>
+                <div class="status-info">
+                    <strong>Add to my status</strong>
+                    <span>Tap to add status update</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Updates -->
+    <div class="status-section">
+        <h3>Recent Updates</h3>
+        <div class="status-list">
+            {% for user in users_with_status %}
+            {% set user_status = user.get_active_status() %}
+            {% if user_status %}
+            <div class="status-item {% if user_status.id not in viewed_status_ids %}unviewed{% endif %}" 
+                 onclick="viewStatus({{ user.id }})">
+                <div class="status-avatar">
+                    <img src="{{ user.get_profile_picture_url() or '/static/images/default-avatar.png' }}" 
+                         alt="{{ user.username }}">
+                    <div class="status-indicator {% if user_status.id not in viewed_status_ids %}unviewed{% else %}viewed{% endif %}"></div>
+                </div>
+                <div class="status-info">
+                    <strong>{{ user.username }}</strong>
+                    <span class="status-time">
+                        {{ user_status.created_at.strftime('%H:%M') }}
+                    </span>
+                </div>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="no-status">
+                <p>No status updates from contacts</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Status Upload Modal -->
+<div id="statusModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add Status</h3>
+            <button class="close-modal" onclick="closeStatusModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <form id="statusForm" enctype="multipart/form-data">
+                <div class="status-options">
+                    <button type="button" class="status-option-btn" onclick="showTextStatus()">
+                        📝 Text Status
+                    </button>
+                    <button type="button" class="status-option-btn" onclick="showImageStatus()">
+                        🖼️ Image Status
+                    </button>
+                </div>
+                
+                <div id="textStatusSection" class="status-section-input">
+                    <textarea id="statusText" placeholder="What's on your mind?" maxlength="140"></textarea>
+                    <small id="charCount">140 characters remaining</small>
+                </div>
+                
+                <div id="imageStatusSection" class="status-section-input" style="display: none;">
+                    <input type="file" id="statusImage" accept="image/*">
+                    <div id="imagePreview" class="image-preview"></div>
+                </div>
+                
+                <button type="submit" class="btn-primary" id="submitStatusBtn">
+                    Post Status
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.status-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: white;
+    min-height: 100vh;
+}
+
+.status-header {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    background: #128C7E;
+    color: white;
+}
+
+.back-button {
+    color: white;
+    text-decoration: none;
+    font-size: 1.5rem;
+    margin-right: 1rem;
+}
+
+.status-section {
+    padding: 1rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    cursor: pointer;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+}
+
+.status-item:hover {
+    background: #f5f5f5;
+}
+
+.status-item.unviewed {
+    background: #e3f2fd;
+}
+
+.status-avatar {
+    position: relative;
+    margin-right: 1rem;
+}
+
+.status-avatar img {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.status-indicator {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.status-indicator.my-status {
+    background: #128C7E;
+}
+
+.status-indicator.unviewed {
+    background: #25D366;
+}
+
+.status-indicator.viewed {
+    background: #666;
+}
+
+.status-info {
+    flex: 1;
+}
+
+.status-time {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.add-status {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    cursor: pointer;
+}
+
+.add-status-icon {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 20px;
+    height: 20px;
+    background: #128C7E;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+}
+
+.delete-status-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+}
+
+/* Modal styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 10% auto;
+    padding: 20px;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 10px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.status-options {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.status-option-btn {
+    flex: 1;
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+}
+
+.status-option-btn:hover {
+    background: #f5f5f5;
+}
+
+.status-section-input {
+    margin-bottom: 1rem;
+}
+
+#statusText {
+    width: 100%;
+    height: 100px;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+}
+
+.image-preview {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+.image-preview img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 8px;
+}
+
+.btn-primary {
+    background: #128C7E;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.btn-primary:hover {
+    background: #0c6b5f;
+}
+
+.no-status {
+    text-align: center;
+    color: #666;
+    padding: 2rem;
+}
+</style>
+
+<script>
+// Character count for text status
+document.getElementById('statusText').addEventListener('input', function() {
+    const remaining = 140 - this.value.length;
+    document.getElementById('charCount').textContent = remaining + ' characters remaining';
+});
+
+function openStatusModal() {
+    document.getElementById('statusModal').style.display = 'block';
+    // Default to text status
+    showTextStatus();
+}
+
+function closeStatusModal() {
+    document.getElementById('statusModal').style.display = 'none';
+    resetStatusForm();
+}
+
+function showTextStatus() {
+    document.getElementById('textStatusSection').style.display = 'block';
+    document.getElementById('imageStatusSection').style.display = 'none';
+}
+
+function showImageStatus() {
+    document.getElementById('textStatusSection').style.display = 'none';
+    document.getElementById('imageStatusSection').style.display = 'block';
+    
+    // Handle image preview
+    document.getElementById('statusImage').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('imagePreview').innerHTML = 
+                    `<img src="${e.target.result}" alt="Preview">`;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+}
+
+function resetStatusForm() {
+    document.getElementById('statusForm').reset();
+    document.getElementById('imagePreview').innerHTML = '';
+    document.getElementById('charCount').textContent = '140 characters remaining';
+}
+
+// Handle status form submission
+document.getElementById('statusForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData();
+    const statusType = document.getElementById('imageStatusSection').style.display !== 'none' ? 'image' : 'text';
+    
+    formData.append('type', statusType);
+    
+    if (statusType === 'text') {
+        const textContent = document.getElementById('statusText').value.trim();
+        if (!textContent) {
+            alert('Please enter status text');
+            return;
+        }
+        formData.append('content', textContent);
+    } else {
+        const imageFile = document.getElementById('statusImage').files[0];
+        if (!imageFile) {
+            alert('Please select an image');
+            return;
+        }
+        formData.append('image', imageFile);
+        formData.append('content', 'image'); // Add content field for image too
+    }
+    
+    try {
+        const response = await fetch('/status/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            closeStatusModal();
+            // Show success message and reload
+            alert('Status posted successfully!');
+            window.location.href = '/status';
+        } else {
+            alert('Error uploading status: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error uploading status: ' + error.message);
+        console.error('Upload error:', error);
+    }
+});
+
+// View status function
+async function viewStatus(userId) {
+    try {
+        const response = await fetch(`/status/user/${userId}`);
+        if (response.ok) {
+            const status = await response.json();
+            alert(`Status: ${status.content}`); // Simple alert for now
+        } else {
+            const error = await response.json();
+            alert('Error loading status: ' + error.error);
+        }
+    } catch (error) {
+        alert('Error loading status: ' + error.message);
+        console.error('Error loading status:', error);
+    }
+}
+
+async function deleteStatus() {
+    if (confirm('Are you sure you want to delete your status?')) {
+        try {
+            const response = await fetch('/status/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('Status deleted successfully!');
+                location.reload();
+            } else {
+                alert('Error deleting status');
+            }
+        } catch (error) {
+            alert('Error deleting status: ' + error.message);
+            console.error(error);
+        }
+    }
+}
+
+// Close modal when clicking outside
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('statusModal');
+    if (event.target === modal) {
+        closeStatusModal();
+    }
+});
+</script>
+{% endblock %}
