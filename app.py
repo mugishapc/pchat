@@ -573,14 +573,15 @@ def upload_audio(conversation_id):
         # Send push notification to the other user (async)
         if other_user.push_subscription:
             try:
-                send_push_notification(
+                socketio.start_background_task(
+                    send_push_notification,
                     other_user.push_subscription,
                     f"New voice message from {session['username']}",
                     "You received a new voice message",
                     conversation_id
                 )
             except Exception as e:
-                print(f"Failed to send push notification: {e}")
+                print(f"Failed to queue push notification: {e}")
         
         return jsonify({
             'success': True, 
@@ -591,6 +592,7 @@ def upload_audio(conversation_id):
     except Exception as e:
         print(f"Error uploading audio: {e}")
         return jsonify({'error': 'Failed to process audio'}), 500
+
 
 # Update conversation list for a user
 def update_conversation_list(conversation, user_id):
@@ -609,6 +611,7 @@ def update_conversation_list(conversation, user_id):
         'other_user_profile_picture': other_user.get_profile_picture_url(),
         'other_user_bio': other_user.bio
     }, room=f'user_{user_id}')
+
 
 # Save push subscription
 @app.route('/save_subscription', methods=['POST'])
@@ -742,16 +745,16 @@ def handle_connect():
         
         # Schedule delayed offline check
         def delayed_offline():
-            time.sleep(5)  # Wait 5 seconds
+            eventlet.sleep(5)  # non-blocking wait
             if user_id not in online_users:  # If user didn't reconnect
                 socketio.emit(
                     'user_status',
                     {'user_id': user_id, 'status': 'offline'},
-                    namespace='/',
-                    room=None
+                    namespace='/'
                 )
         
         socketio.start_background_task(delayed_offline)
+
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -764,20 +767,17 @@ def handle_disconnect():
         if user_id in recording_users:
             del recording_users[user_id]
 
-        # Notify all users about offline status change after a delay
         def delayed_offline():
-            time.sleep(5)  # Wait 5 seconds
+            eventlet.sleep(5)  # non-blocking wait
             if user_id not in online_users:  # If user didn't reconnect
-                # Broadcast to all clients
                 socketio.emit(
                     'user_status',
                     {'user_id': user_id, 'status': 'offline'},
-                    namespace='/',
-                    room=None
+                    namespace='/'
                 )
 
-        # Start the background task using Eventlet
         socketio.start_background_task(delayed_offline)
+
 
 
 @socketio.on('user_activity')
