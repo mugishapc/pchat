@@ -1,4 +1,4 @@
-* { 
+THEN MAKE EVERYTHING WORK WELL ON MOBILE. I CANT'T TYPE TXT MESSAGES :  * { 
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -27,7 +27,6 @@
     --vh: 1vh;
 }
 
-/* CRITICAL FIX: Allow text selection and input on mobile */
 body {
     background-color: var(--chat-background);
     color: var(--text-dark);
@@ -35,22 +34,12 @@ body {
     height: calc(var(--vh, 1vh) * 100);
     overflow: hidden;
     -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: default; /* Changed from none to default */
-    -webkit-user-select: text; /* Changed from none to text */
-    -khtml-user-select: text; /* Changed from none to text */
-    -moz-user-select: text; /* Changed from none to text */
-    -ms-user-select: text; /* Changed from none to text */
-    user-select: text; /* Changed from none to text */
-}
-
-/* Allow inputs to be focusable and selectable */
-input, textarea, [contenteditable] {
-    -webkit-user-select: text;
-    -moz-user-select: text;
-    -ms-user-select: text;
-    user-select: text;
-    -webkit-touch-callout: default;
-    -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 body:not(.user-is-tabbing) button:focus,
@@ -103,10 +92,8 @@ body:not(.user-is-tabbing) textarea:focus {
     padding: 12px 14px;
     border: 1px solid var(--border-dark);
     border-radius: 3px;
-    font-size: 16px; /* Increased for mobile */
+    font-size: 15px;
     background-color: #f9f9f9;
-    -webkit-appearance: none; /* Remove iOS shadow */
-    appearance: none;
 }
 
 .btn {
@@ -116,7 +103,7 @@ body:not(.user-is-tabbing) textarea:focus {
     color: white;
     border: none;
     border-radius: 3px;
-    font-size: 16px; /* Increased for mobile */
+    font-size: 15px;
     cursor: pointer;
     font-weight: 500;
     letter-spacing: 0.5px;
@@ -310,8 +297,6 @@ body:not(.user-is-tabbing) textarea:focus {
     width: 100%;
     font-size: 14px;
     color: var(--text-dark);
-    -webkit-user-select: text;
-    user-select: text;
 }
 
 .search-input:focus {
@@ -561,8 +546,6 @@ body:not(.user-is-tabbing) textarea:focus {
     word-wrap: break-word;
     font-size: 15px;
     line-height: 1.4;
-    -webkit-user-select: text;
-    user-select: text;
 }
 
 .audio-message {
@@ -623,14 +606,12 @@ audio {
     font-size: 13px;
 }
 
-/* CRITICAL FIX: Chat Input for Mobile */
+/* Chat Input */
 .chat-input-container {
     padding: 10px 16px;
     background-color: #f0f0f0;
     border-top: 1px solid var(--border-dark);
     min-height: 62px;
-    position: relative;
-    z-index: 1000;
 }
 
 .input-group {
@@ -638,7 +619,6 @@ audio {
     align-items: center;
     gap: 10px;
     margin-bottom: 0;
-    width: 100%;
 }
 
 .emoji-btn, .attach-btn {
@@ -649,51 +629,35 @@ audio {
     cursor: pointer;
     padding: 8px;
     opacity: 0.8;
-    flex-shrink: 0;
 }
 
 .emoji-btn:hover, .attach-btn:hover {
     opacity: 1;
 }
 
-/* FIXED: Message input for mobile */
 #message-input {
     flex: 1;
     padding: 12px 15px;
     border: none;
     border-radius: 20px;
-    font-size: 16px; /* Increased for mobile */
+    font-size: 15px;
     outline: none;
     background-color: white;
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
-    min-height: 44px; /* Minimum touch target size */
-    -webkit-appearance: none;
-    appearance: none;
-    -webkit-user-select: text;
-    user-select: text;
-    -webkit-tap-highlight-color: rgba(0,0,0,0.1);
-}
-
-/* Remove iOS inner shadow */
-#message-input {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
 }
 
 .mic-btn {
     background: var(--primary-green);
     color: white;
     border: none;
-    width: 44px; /* Increased for mobile */
-    height: 44px; /* Increased for mobile */
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: background 0.3s;
-    flex-shrink: 0;
 }
 
 .mic-btn.recording {
@@ -711,8 +675,8 @@ audio {
     background: var(--primary-green);
     color: white;
     border: none;
-    width: 44px; /* Increased for mobile */
-    height: 44px; /* Increased for mobile */
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     cursor: pointer;
     font-weight: 500;
@@ -721,7 +685,6 @@ audio {
     align-items: center;
     justify-content: center;
     font-size: 18px;
-    flex-shrink: 0;
 }
 
 #send-btn:hover {
@@ -756,7 +719,321 @@ audio {
     font-size: 14px;
 }
 
-/* Mobile responsiveness - CRITICAL FIXES */
+/* ----------------------------- */
+/*     PWA Install Prompt         */
+/* ----------------------------- */
+#install-prompt {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--primary-green);
+    color: var(--white);
+    padding: 12px 20px;
+    border-radius: 25px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    display: none; /* Hidden by default */
+    z-index: 10000;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+#install-prompt.show {
+    display: block;
+    animation: slideUp 0.5s ease forwards;
+}
+
+#install-prompt:hover {
+    background-color: var(--secondary-green);
+}
+
+@keyframes slideUp {
+    0% { opacity: 0; transform: translate(-50%, 50px); }
+    100% { opacity: 1; transform: translate(-50%, 0); }
+}
+
+
+/* Animation for app launch */
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+#app-launch {
+    animation: fadeOut 0.5s ease-in-out 2s forwards;
+}
+
+.touch-active {
+    transform: scale(0.95);
+    opacity: 0.8;
+    transition: transform 0.1s, opacity 0.1s;
+}
+
+.no-scroll {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .chat-layout {
+        flex-direction: column;
+        height: calc(100% - 60px);
+    }
+    
+    .sidebar {
+        width: 100%;
+        height: 40%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-light);
+    }
+    
+    .main-chat-area {
+        height: 60%;
+    }
+    
+    .message {
+        max-width: 85%;
+    }
+    
+    audio {
+        width: 200px;
+    }
+    
+    .chat-header {
+        padding: 10px 15px;
+    }
+    
+    .user-info {
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+        margin-right: 10px;
+    }
+    
+    .user-name {
+        font-size: 16px;
+    }
+    
+    .conversation-item, .user-item {
+        padding: 10px 15px;
+    }
+    
+    .input-group {
+        flex-direction: row;
+    }
+    
+    #send-btn {
+        margin-left: 0;
+        margin-top: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .auth-form {
+        padding: 1.5rem;
+        margin: 0 15px;
+    }
+    
+    .user-avatar, .conversation-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    .user-name {
+        font-size: 16px;
+    }
+    
+    .message {
+        max-width: 90%;
+        padding: 8px 12px;
+    }
+    
+    audio {
+        width: 180px;
+    }
+    
+    .logout-btn, .delete-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    input, textarea, select {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+    
+    .sidebar-header {
+        padding: 10px 12px;
+    }
+    
+    .chat-input-container {
+        padding: 10px 12px;
+    }
+}
+
+
+/* Back button */
+.back-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--primary-green);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.back-btn:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Chat Screen Styles */
+.chat-screen-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background-color: var(--teal-green);
+    color: white;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.chat-info {
+    text-align: left;
+    flex: 1;
+    margin-left: 15px;
+}
+
+.chat-name {
+    font-weight: 500;
+    font-size: 16px;
+}
+
+.chat-status {
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background-color: var(--chat-background);
+    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23000000' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E");
+}
+
+.chat-input-container {
+    padding: 10px 16px;
+    background-color: #f0f0f0;
+    border-top: 1px solid var(--border-dark);
+}
+
+/* Chat List Screen Styles */
+.chat-list-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: white;
+}
+
+.chat-list-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.chat-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background-color: var(--teal-green);
+    color: white;
+    min-height: 60px;
+}
+
+.chat-list-title {
+    font-size: 20px;
+    font-weight: 500;
+}
+
+/* WhatsApp specific tweaks */
+.conversation-item {
+    position: relative;
+}
+
+.conversation-item::after {
+    content: '';
+    position: absolute;
+    left: 80px;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background-color: var(--border-light);
+}
+
+.conversation-item:last-child::after {
+    display: none;
+}
+
+/* Message tail for WhatsApp style */
+.message.sent::before {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 0;
+    width: 8px;
+    height: 13px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 13' width='8' height='13'%3E%3Cpath opacity='.13' d='M5.188 1H0v11.193l6.467-8.625C7.526 2.156 6.958 1 5.188 1z'/%3E%3Cpath fill='%23dcf8c6' d='M5.188 0H0v11.193l6.467-8.625C7.526 1.156 6.958 0 5.188 0z'/%3E%3C/svg%3E");
+}
+
+.message.received::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 0;
+    width: 8px;
+    height: 13px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 13' width='8' height='13'%3E%3Cpath opacity='.13' fill='%23000000' d='M1.533 3.568L8 12.193V1H2.812C1.042 1 .474 2.156 1.533 3.568z'/%3E%3Cpath fill='%23ffffff' d='M1.533 2.568L8 11.193V0H2.812C1.042 0 .474 1.156 1.533 2.568z'/%3E%3C/svg%3E");
+}
+
+/* Focus states for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+.user-is-tabbing *:focus {
+    outline: 2px solid var(--primary-green);
+    outline-offset: 2px;
+}
+
+
+/* Mobile-specific enhancements for chat input */
 @media (max-width: 768px) {
     .chat-layout {
         flex-direction: column;
@@ -810,7 +1087,7 @@ audio {
         padding: 10px 15px;
     }
     
-    /* MOBILE CHAT INPUT FIXES */
+    /* Mobile chat input specific fixes */
     .chat-input-container {
         position: sticky;
         bottom: 0;
@@ -818,7 +1095,7 @@ audio {
         background-color: #f0f0f0;
         padding: 10px 12px;
         border-top: 1px solid var(--border-dark);
-        z-index: 1000;
+        z-index: 100;
         /* Add safe area for mobile notches */
         padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     }
@@ -827,24 +1104,23 @@ audio {
         flex-direction: row;
         align-items: center;
         gap: 8px;
-        width: 100%;
     }
     
     #message-input {
-        min-height: 44px; /* Minimum touch target */
+        min-height: 40px;
         font-size: 16px; /* Prevents zoom on iOS */
         line-height: 1.4;
-        padding: 12px 15px; /* Adequate padding */
+        padding: 10px 15px;
         border-radius: 20px;
         flex: 1;
-        -webkit-user-select: text;
-        user-select: text;
     }
     
-    #send-btn, .mic-btn {
-        width: 44px;
-        height: 44px;
+    #send-btn {
+        margin-left: 0;
+        margin-top: 0;
         flex-shrink: 0;
+        width: 40px;
+        height: 40px;
     }
     
     .emoji-btn, .attach-btn {
@@ -855,9 +1131,7 @@ audio {
     
     /* Ensure messages don't get hidden behind input */
     .chat-messages {
-        padding-bottom: 80px; /* Space for input area */
-        overflow-y: scroll;
-        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        padding-bottom: 70px; /* Space for input area */
     }
     
     /* Adjust for mobile landscape */
@@ -871,17 +1145,16 @@ audio {
         }
         
         .chat-messages {
-            padding-bottom: 70px;
+            padding-bottom: 60px;
         }
         
         .chat-input-container {
             padding: 8px 12px;
-            padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
         }
         
         #message-input {
-            min-height: 40px;
-            padding: 10px 12px;
+            min-height: 36px;
+            padding: 8px 12px;
         }
     }
 }
@@ -931,14 +1204,16 @@ audio {
     
     /* Extra small devices */
     #message-input {
-        font-size: 16px; /* Maintain readable size */
-        padding: 12px 15px;
+        font-size: 15px;
+        padding: 8px 12px;
     }
     
     .emoji-btn, .attach-btn {
         font-size: 18px;
     }
 }
+
+
 
 /* Prevent body scrolling when keyboard is visible on mobile */
 body.keyboard-visible {
@@ -952,6 +1227,8 @@ body.keyboard-visible {
 .mobile-input-focus #message-input {
     border: 2px solid var(--primary-green);
 }
+
+
 
 /* User activity indicator */
 .user-activity-indicator {
@@ -967,75 +1244,556 @@ body.keyboard-visible {
     50% { opacity: 1; }
 }
 
-/* ... (rest of your existing CSS remains the same) ... */
+/* Typing indicator animation */
+.typing-indicator {
+    display: inline-flex;
+    align-items: center;
+}
 
-/* Add these mobile-specific fixes */
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #666;
+    border-radius: 50%;
+    margin: 0 2px;
+    animation: typingAnimation 1.4s infinite ease-in-out;
+}
 
-/* iOS Safari specific fixes */
-@supports (-webkit-touch-callout: none) {
-    .chat-messages {
-        -webkit-overflow-scrolling: touch;
+.typing-dot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingAnimation {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.6;
     }
-    
-    #message-input {
-        font-size: 16px; /* Prevent zoom on focus */
+    30% {
+        transform: translateY(-5px);
+        opacity: 1;
     }
 }
 
-/* Android Chrome specific fixes */
-@supports (-webkit-appearance: none) {
-    #message-input {
-        appearance: none;
+/* Recording indicator animation */
+.recording-indicator {
+    display: inline-flex;
+    align-items: center;
+    color: #e74c3c;
+}
+
+.recording-pulse {
+    width: 10px;
+    height: 10px;
+    background-color: #e74c3c;
+    border-radius: 50%;
+    margin-right: 5px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.7;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(0.8);
+        opacity: 0.7;
     }
 }
 
-/* Ensure inputs are always accessible */
-input, textarea {
-    -webkit-user-select: auto !important;
-    -moz-user-select: auto !important;
-    -ms-user-select: auto !important;
-    user-select: auto !important;
-    -webkit-touch-callout: default !important;
+/* Message status indicators */
+.message-info {
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
+    font-size: 11px;
+    color: #999;
 }
 
-/* Fix for mobile keyboard covering input */
+.timestamp {
+    margin-right: 5px;
+}
+
+.read-status {
+    color: #3498db;
+    font-size: 12px;
+}
+
+/* Audio message styling */
+.audio-message {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 18px;
+    max-width: 250px;
+}
+
+.audio-message audio {
+    width: 100%;
+    height: 40px;
+}
+
+/* Mobile responsiveness */
 @media (max-width: 768px) {
-    .chat-input-container {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: #f0f0f0;
-        padding: 10px 12px;
-        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-        border-top: 1px solid #ddd;
-        z-index: 1000;
+    .user-activity-indicator {
+        font-size: 11px;
+        margin-left: 5px;
     }
     
-    .chat-messages {
-        padding-bottom: 100px; /* Extra space for fixed input */
+    .audio-message {
+        max-width: 200px;
     }
 }
 
-/* Touch device improvements */
-@media (hover: none) and (pointer: coarse) {
-    .message {
-        max-width: 90%;
+/* Input focus states */
+.message-input:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+/* Button hover effects */
+.mic-btn:hover, .send-btn:hover {
+    background-color: #667eea;
+    color: white;
+}
+
+/* Animation for new messages */
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
     }
-    
-    .conversation-item, .user-item {
-        padding: 12px 15px; /* Larger touch targets */
-    }
-    
-    button {
-        min-height: 44px; /* Minimum touch target size */
-        min-width: 44px;
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 
-/* High DPI mobile devices */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-    .message {
-        border-radius: 8px; /* Smoother borders */
+.message {
+    animation: messageSlideIn 0.3s ease-out;
+}
+
+/* Status indicators */
+.chat-status {
+    font-size: 12px;
+    margin-left: 8px;
+}
+
+.chat-status.online {
+    color: #27ae60;
+}
+
+.chat-status.recently-online {
+    color: #f39c12;
+}
+
+.chat-status.offline {
+    color: #95a5a6;
+}
+
+/* Loading animation for app launch */
+@keyframes appLaunch {
+    0% { transform: scale(0.9); opacity: 0; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+#app-launch {
+    animation: appLaunch 1s ease-out;
+}
+
+/* Keyboard visibility for mobile */
+.keyboard-visible .chat-input-container {
+    padding-bottom: 300px; /* Adjust based on keyboard height */
+    transition: padding-bottom 0.3s ease;
+}
+
+/* Scrollbar styling */
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+
+
+/* Add these styles to your existing CSS file */
+
+/* User activity indicator */
+.user-activity-indicator {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+    margin-left: 10px;
+    animation: fadeInOut 1.5s infinite;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+
+/* Typing indicator animation */
+.typing-indicator {
+    display: inline-flex;
+    align-items: center;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #666;
+    border-radius: 50%;
+    margin: 0 2px;
+    animation: typingAnimation 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typingAnimation {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.6;
+    }
+    30% {
+        transform: translateY(-5px);
+        opacity: 1;
+    }
+}
+
+/* Recording indicator animation */
+.recording-indicator {
+    display: inline-flex;
+    align-items: center;
+    color: #e74c3c;
+}
+
+.recording-pulse {
+    width: 10px;
+    height: 10px;
+    background-color: #e74c3c;
+    border-radius: 50%;
+    margin-right: 5px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.7;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(0.8);
+        opacity: 0.7;
+    }
+}
+
+/* Message status indicators */
+.message-info {
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
+    font-size: 11px;
+    color: #999;
+}
+
+.timestamp {
+    margin-right: 5px;
+}
+
+.read-status {
+    color: #3498db;
+    font-size: 12px;
+}
+
+/* Audio message styling */
+.audio-message {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 18px;
+    max-width: 250px;
+}
+
+.audio-message audio {
+    width: 100%;
+    height: 40px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .user-activity-indicator {
+        font-size: 11px;
+        margin-left: 5px;
+    }
+    
+    .audio-message {
+        max-width: 200px;
+    }
+}
+
+/* Input focus states */
+.message-input:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+/* Button hover effects */
+.mic-btn:hover, .send-btn:hover {
+    background-color: #667eea;
+    color: white;
+}
+
+/* Animation for new messages */
+@keyframes messageSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message {
+    animation: messageSlideIn 0.3s ease-out;
+}
+
+/* Status indicators */
+.chat-status {
+    font-size: 12px;
+    margin-left: 8px;
+}
+
+.chat-status.online {
+    color: #27ae60;
+}
+
+.chat-status.recently-online {
+    color: #f39c12;
+}
+
+.chat-status.offline {
+    color: #95a5a6;
+}
+
+/* Loading animation for app launch */
+@keyframes appLaunch {
+    0% { transform: scale(0.9); opacity: 0; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+#app-launch {
+    animation: appLaunch 1s ease-out;
+}
+
+/* Keyboard visibility for mobile */
+.keyboard-visible .chat-input-container {
+    padding-bottom: 300px; /* Adjust based on keyboard height */
+    transition: padding-bottom 0.3s ease;
+}
+
+/* Scrollbar styling */
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+
+
+/* Settings Button Styles */
+.header-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.settings-btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    text-decoration: none;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 18px;
+    transition: background 0.3s;
+}
+
+.settings-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .settings-container,
+    .edit-profile-container,
+    .about-container,
+    .terms-container {
+        margin: 0;
+    }
+    
+    .settings-content,
+    .edit-profile-content,
+    .about-content,
+    .terms-content {
+        padding: 15px;
+    }
+}
+
+.status-indicator {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    background: #25D366;
+    border: 2px solid white;
+    border-radius: 50%;
+}
+
+
+.install-prompt {
+    display: none; /* hidden by default */
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    padding: 16px 24px;
+    z-index: 99999;
+}
+
+/* Install Prompt Styles */
+.install-prompt {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    padding: 16px 20px;
+    z-index: 10000;
+    width: 90%;
+    max-width: 350px;
+    animation: slideUpInstall 0.3s ease-out;
+    border: 1px solid #e0e0e0;
+}
+
+.install-prompt-content {
+    text-align: center;
+}
+
+.install-prompt-content p {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.install-prompt-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.install-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 100px;
+}
+
+.install-btn.accept {
+    background-color: var(--primary-green);
+    color: white;
+}
+
+.install-btn.accept:hover {
+    background-color: var(--teal-green);
+    transform: translateY(-1px);
+}
+
+.install-btn.cancel {
+    background-color: #f0f0f0;
+    color: #666;
+}
+
+.install-btn.cancel:hover {
+    background-color: #e0e0e0;
+}
+
+@keyframes slideUpInstall {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 100%);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+/* Hide install prompt on standalone mode */
+@media all and (display-mode: standalone) {
+    .install-prompt {
+        display: none !important;
     }
 }
