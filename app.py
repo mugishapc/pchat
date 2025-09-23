@@ -499,33 +499,28 @@ def delete_message(message_id):
 def upload_audio(conversation_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
-    
+
     # Check if user is part of this conversation
     conversation = db.session.get(Conversation, conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return jsonify({'error': 'Access denied'}), 403
-    
-    # Check if audio file exists in request
+
     if 'audio' not in request.files:
         return jsonify({'error': 'No audio file provided'}), 400
-    
+
     audio_file = request.files['audio']
     if audio_file.filename == '':
         return jsonify({'error': 'No audio file selected'}), 400
-    
+
     try:
-        # Read audio data
         audio_data = audio_file.read()
-        
-        # Validate audio data (basic check)
-        if len(audio_data) < 100:  # Minimum size for valid audio
+        if len(audio_data) < 500:
             return jsonify({'error': 'Invalid audio data'}), 400
-        
-        # Convert to base64 for storage
+
         audio_base64 = base64.b64encode(audio_data).decode('utf-8')
         data_url = f"data:audio/webm;base64,{audio_base64}"
-        
-        # Save to database immediately
+
+        # Save message
         message = Message(
             content=data_url,
             message_type='audio',
@@ -533,23 +528,20 @@ def upload_audio(conversation_id):
             conversation_id=conversation_id
         )
         db.session.add(message)
-        
-        # Update conversation last message and unread count
+        db.session.flush()  # get message.id before commit
+
+        # Update conversation
         conversation.last_message_id = message.id
         if conversation.user1_id == session['user_id']:
             conversation.unread_count_user2 += 1
         else:
             conversation.unread_count_user1 += 1
-        
+
         db.session.commit()
-        
-        # Get the other user in the conversation
+
         other_user = conversation.user1 if conversation.user1_id != session['user_id'] else conversation.user2
-        
-        # Get current user's profile picture
         current_user = User.query.get(session['user_id'])
-        
-        # Prepare message data for immediate broadcast
+
         message_data = {
             'id': message.id,
             'content': data_url,
@@ -560,17 +552,14 @@ def upload_audio(conversation_id):
             'conversation_id': conversation_id,
             'is_read': message.is_read,
             'user_profile_picture': current_user.get_profile_picture_url(),
-            'duration': request.form.get('duration', 0)  # Add duration if provided
+            'duration': float(request.form.get('duration', 0))
         }
-        
-        # Broadcast to conversation room IMMEDIATELY
+
         socketio.emit('new_message', message_data, room=f'conversation_{conversation_id}')
-        
-        # Update conversation list for both users
+
         update_conversation_list(conversation, session['user_id'])
         update_conversation_list(conversation, other_user.id)
-        
-        # Send push notification to the other user (async)
+
         if other_user.push_subscription:
             try:
                 socketio.start_background_task(
@@ -582,26 +571,17 @@ def upload_audio(conversation_id):
                 )
             except Exception as e:
                 print(f"Failed to queue push notification: {e}")
-        
-        return jsonify({
-            'success': True, 
-            'message_id': message.id,
-            'timestamp': message.timestamp.isoformat()
-        })
-        
+
+        return jsonify({'success': True, 'message_id': message.id, 'timestamp': message.timestamp.isoformat()})
+
     except Exception as e:
         print(f"Error uploading audio: {e}")
         return jsonify({'error': 'Failed to process audio'}), 500
-
-
-# Update conversation list for a user
 def update_conversation_list(conversation, user_id):
     other_user = conversation.user1 if conversation.user1_id != user_id else conversation.user2
-    
-    # Get unread count for the user
     unread_count = conversation.unread_count_user1 if conversation.user1_id == user_id else conversation.unread_count_user2
-    
-    socketio.emit('update_conversation', {
+
+    socketio.emit('conversation_updated', {
         'conversation_id': conversation.id,
         'other_user_id': other_user.id,
         'other_username': other_user.username,
