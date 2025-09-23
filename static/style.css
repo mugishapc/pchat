@@ -1,4 +1,4 @@
- * { 
+* { 
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -1953,4 +1953,30 @@ body.keyboard-visible {
 /* Prevent bounce effect on iOS */
 .sidebar-content {
     position: relative;
+}
+
+/* Container for audio messages */
+.audio-message {
+    margin: 5px 0;
+    display: flex;
+    align-items: center;
+}
+
+/* Audio player itself */
+.audio-message audio {
+    width: 250px;        /* Adjust width as needed */
+    height: 40px;        /* Optional: makes it taller for better visibility */
+    outline: none;       /* Removes default focus outline */
+}
+
+/* Optional: controls wrapper if you have custom buttons */
+.audio-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 5px;
+    padding: 5px 10px;
+    background-color: #f1f1f1;
+    border-radius: 15px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
