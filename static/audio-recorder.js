@@ -85,7 +85,7 @@ class AudioRecorder {
             this.startTimer();
             
             // Add visual feedback
-            this.recordButton.innerHTML = '🎤 Recording...';
+            this.recordButton.innerHTML = '🎙️ Recording...';
             
         } catch (error) {
             console.error('Error starting recording:', error);
