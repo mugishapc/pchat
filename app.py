@@ -1311,5 +1311,18 @@ def get_user_status(user_id):
     return jsonify(status_data)
 
 
+@app.template_filter('format_time')
+def format_time(value):
+    """Format a datetime object as HH:MM or a readable string."""
+    if not value:
+        return ''
+    if isinstance(value, str):
+        # parse string to datetime if needed
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    return value.strftime('%H:%M')
+
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
