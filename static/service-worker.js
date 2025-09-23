@@ -1,120 +1,150 @@
-const CACHE_NAME = 'mugichat-v3';
+const CACHE_NAME = 'mugichat-v4';
 const urlsToCache = [
   '/',
-  '/offline',
   '/static/style.css',
-  '/static/script.js',
-  '/static/audio-recorder.js',
   '/static/icons/icon-72x72.png',
-  '/static/icons/icon-192x192.png'
+  '/static/icons/icon-192x192.png',
+  '/static/icons/icon-512x512.png'
 ];
 
 // Install event
 self.addEventListener('install', event => {
+  console.log('Service Worker installing.');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
+        console.log('Opened cache');
         return cache.addAll(urlsToCache);
       })
+      .then(() => self.skipWaiting())
   );
-});
-
-// Fetch event
-self.addEventListener('fetch', event => {
-  // Handle API requests differently
-  if (event.request.url.includes('/api/') || 
-      event.request.url.includes('/messages/') ||
-      event.request.url.includes('/conversation/') ||
-      event.request.url.includes('/users/status')) {
-    // For API calls, try network first, then fail
-    event.respondWith(
-      fetch(event.request)
-        .catch(error => {
-          return new Response(JSON.stringify({ 
-            error: 'Network error', 
-            offline: true 
-          }), {
-            headers: { 'Content-Type': 'application/json' }
-          });
-        })
-    );
-  } else {
-    // For other resources, try cache first, then network
-    event.respondWith(
-      caches.match(event.request)
-        .then(response => {
-          return response || fetch(event.request)
-            .catch(error => {
-              // If both fail, show offline page for navigation requests
-              if (event.request.mode === 'navigate') {
-                return caches.match('/offline');
-              }
-            });
-        })
-    );
-  }
 });
 
 // Activate event
 self.addEventListener('activate', event => {
+  console.log('Service Worker activating.');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cache => {
           if (cache !== CACHE_NAME) {
+            console.log('Deleting old cache:', cache);
             return caches.delete(cache);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
-// Background sync for messages when coming back online
-self.addEventListener('sync', event => {
-  if (event.tag === 'send-message') {
-    event.waitUntil(sendPendingMessages());
+// Fetch event
+self.addEventListener('fetch', event => {
+  // Skip cross-origin requests
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+  
+  // For API calls, network first strategy
+  if (event.request.url.includes('/api/') || 
+      event.request.url.includes('/messages/') ||
+      event.request.url.includes('/conversation/') ||
+      event.request.url.includes('/users/status')) {
+    
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Cache successful API responses
+          if (response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME)
+              .then(cache => {
+                cache.put(event.request, responseToCache);
+              });
+          }
+          return response;
+        })
+        .catch(() => {
+          // Fall back to cache if network fails
+          return caches.match(event.request);
+        })
+    );
+  } else {
+    // For static assets, cache first strategy
+    event.respondWith(
+      caches.match(event.request)
+        .then(response => {
+          if (response) {
+            return response;
+          }
+          
+          return fetch(event.request).then(response => {
+            // Check if we received a valid response
+            if (!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
+            }
+            
+            // Clone the response
+            const responseToCache = response.clone();
+            
+            caches.open(CACHE_NAME)
+              .then(cache => {
+                cache.put(event.request, responseToCache);
+              });
+            
+            return response;
+          });
+        })
+    );
   }
 });
 
 // Push notification event
 self.addEventListener('push', function(event) {
-  if (event.data) {
-    const payload = event.data.json();
-    
-    const options = {
-      body: payload.body,
-      icon: payload.icon || '/static/icons/icon-192x192.png',
-      badge: payload.badge || '/static/icons/icon-72x72.png',
-      data: payload.data || {},
-      vibrate: [200, 100, 200]
+  if (!event.data) return;
+  
+  let data = {};
+  try {
+    data = event.data.json();
+  } catch (e) {
+    data = {
+      title: 'MugiChat',
+      body: 'You have a new message',
+      icon: '/static/icons/icon-192x192.png'
     };
-    
-    event.waitUntil(
-      self.registration.showNotification(payload.title, options)
-    );
   }
+  
+  const options = {
+    body: data.body || 'You have a new message',
+    icon: data.icon || '/static/icons/icon-192x192.png',
+    badge: '/static/icons/icon-72x72.png',
+    data: data.data || { url: '/' },
+    vibrate: [100, 50, 100],
+    tag: 'mugichat-notification'
+  };
+  
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'MugiChat', options)
+  );
 });
 
 // Notification click event
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   
-  const conversationId = event.notification.data.conversation_id;
-  
   event.waitUntil(
-    clients.openWindow(event.notification.data.url || '/')
-      .then(windowClient => {
-        // Focus on the window and navigate to the conversation
-        if (windowClient) {
-          windowClient.focus();
-          // Send a message to the client to open the specific conversation
-          windowClient.postMessage({
-            type: 'OPEN_CONVERSATION',
-            conversationId: conversationId
-          });
+    clients.matchAll({type: 'window'}).then(windowClients => {
+      // Check if there is already a window/tab open with the target URL
+      for (let client of windowClients) {
+        if (client.url === event.notification.data.url && 'focus' in client) {
+          return client.focus();
         }
-      })
+      }
+      
+      // If not, then open the target URL in a new window/tab
+      if (clients.openWindow) {
+        return clients.openWindow(event.notification.data.url || '/');
+      }
+    })
   );
 });
 
@@ -124,9 +154,3 @@ self.addEventListener('message', event => {
     self.skipWaiting();
   }
 });
-
-// Example function for background sync (you'll need to implement based on your app)
-function sendPendingMessages() {
-  // This would check IndexedDB for pending messages and send them
-  return Promise.resolve();
-}

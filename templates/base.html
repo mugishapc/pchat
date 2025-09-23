@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#075E54">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="MugiChat">
     <meta name="description" content="A real-time messaging application with voice messages">
-    <title>MugiChat </title>
+    <title>MugiChat</title>
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
@@ -24,7 +27,7 @@
     <!-- Install Prompt -->
     <div id="installPrompt" class="install-prompt">
         <div class="install-prompt-content">
-            <p>Install MugiChat in Your device</p>
+            <p>Install MugiChat on your device</p>
             <div class="install-prompt-buttons">
                 <button id="installCancel" class="install-btn cancel">Not Now</button>
                 <button id="installAccept" class="install-btn accept">Install</button>
@@ -62,7 +65,7 @@
             deferredPrompt = e;
             
             // Show the install prompt (but only if not already installed)
-            if (!window.matchMedia('(display-mode: standalone)').matches) {
+            if (!isRunningInStandaloneMode()) {
                 setTimeout(() => {
                     installPrompt.style.display = 'block';
                 }, 3000);
@@ -71,6 +74,8 @@
         
         installCancel.addEventListener('click', () => {
             installPrompt.style.display = 'none';
+            // Hide for a week
+            localStorage.setItem('installPromptDismissed', Date.now());
         });
         
         installAccept.addEventListener('click', async () => {
@@ -80,6 +85,7 @@
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') {
                     console.log('User accepted the install prompt');
+                    localStorage.setItem('appInstalled', 'true');
                 } else {
                     console.log('User dismissed the install prompt');
                 }
@@ -88,35 +94,48 @@
         });
         
         // Check if app is running in standalone mode
+        function isRunningInStandaloneMode() {
+            return (window.matchMedia('(display-mode: standalone)').matches) || 
+                   (window.navigator.standalone) || 
+                   (document.referrer.includes('android-app://'));
+        }
+        
+        // Check if prompt was recently dismissed
+        function shouldShowInstallPrompt() {
+            const dismissed = localStorage.getItem('installPromptDismissed');
+            if (!dismissed) return true;
+            
+            const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            return dismissed < oneWeekAgo;
+        }
+        
+        // Show launch animation if app opened from home screen (standalone)
         window.addEventListener('load', () => {
-            if (window.matchMedia('(display-mode: standalone)').matches) {
-                console.log('Running in standalone mode');
+            const isStandalone = isRunningInStandaloneMode();
+            const appLaunch = document.getElementById('app-launch');
+            const chatListTemplate = document.getElementById('chat-list-template');
+            
+            if (isStandalone && appLaunch && chatListTemplate) {
+                chatListTemplate.style.display = 'none';
+                appLaunch.style.display = 'flex';
+                appLaunch.style.opacity = '1';
+                
+                // Launch animation
+                setTimeout(() => {
+                    appLaunch.style.transition = 'opacity 0.8s ease';
+                    appLaunch.style.opacity = '0';
+                    setTimeout(() => {
+                        appLaunch.style.display = 'none';
+                        chatListTemplate.style.display = 'block';
+                    }, 800);
+                }, 2500); // 2.5 seconds splash
+            }
+            
+            // Hide install prompt if already installed or running in standalone
+            if (isStandalone || localStorage.getItem('appInstalled') === 'true') {
+                installPrompt.style.display = 'none';
             }
         });
-
-        // Show launch animation if app opened from home screen (standalone)
-window.addEventListener('load', () => {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    const appLaunch = document.getElementById('app-launch');
-    const chatListTemplate = document.getElementById('chat-list-template');
-
-    if (isStandalone && appLaunch && chatListTemplate) {
-        chatListTemplate.style.display = 'none';
-        appLaunch.style.display = 'flex';
-        appLaunch.style.opacity = '1';
-
-        // Launch animation
-        setTimeout(() => {
-            appLaunch.style.transition = 'opacity 0.8s ease';
-            appLaunch.style.opacity = '0';
-            setTimeout(() => {
-                appLaunch.style.display = 'none';
-                chatListTemplate.style.display = 'block';
-            }, 800);
-        }, 2500); // 2.5 seconds splash
-    }
-});
-
     </script>
 </body>
 </html>

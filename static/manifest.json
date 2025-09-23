@@ -1,12 +1,13 @@
 {
-  "name": "MugiChat - Messaging App",
+  "name": "MugiChat",
   "short_name": "MugiChat",
   "description": "A real-time messaging application with voice messages",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#667eea",
-  "theme_color": "#667eea",
-  "orientation": "portrait",
+  "background_color": "#075E54",
+  "theme_color": "#075E54",
+  "orientation": "portrait-primary",
+  "scope": "/",
   "icons": [
     {
       "src": "/static/icons/icon-72x72.png",
