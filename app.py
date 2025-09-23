@@ -1243,11 +1243,11 @@ def upload_status():
 
         # Emit socket event
         socketio.emit('status_updated', {
-            'user_id': session['user_id'],
-            'username': session.get('username'),
-            'has_status': True,
-            'status_type': status_type
-        }, broadcast=True)
+    'user_id': session['user_id'],
+    'username': session.get('username'),
+    'has_status': True,
+    'status_type': status_type
+})
 
         return jsonify({'success': True, 'status_id': status.id})
 
@@ -1298,10 +1298,10 @@ def delete_status():
         
         # Broadcast status removal
         socketio.emit('status_updated', {
-            'user_id': session['user_id'],
-            'username': session['username'],
-            'has_status': False
-        }, broadcast=True)
+    'user_id': session['user_id'],
+    'username': session['username'],
+    'has_status': False
+})
         
         return jsonify({'success': True})
     
