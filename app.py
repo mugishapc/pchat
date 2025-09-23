@@ -105,11 +105,11 @@ class User(db.Model):
         ).first() is not None
     
     def get_active_status(self):
-        from datetime import datetime
+        """Get the user's active status"""
         return Status.query.filter(
             Status.user_id == self.id,
             Status.expires_at > datetime.utcnow()
-        ).first()
+        ).order_by(Status.created_at.desc()).first()
 
 class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1111,6 +1111,40 @@ def catch_all(path):
     return render_template('base.html')
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Status routes
 
 @app.route('/status')
@@ -1169,13 +1203,11 @@ def upload_status():
         status_type = request.form.get('type', 'text')
         content = request.form.get('content', '').strip()
 
-        if not content:
-            return jsonify({'error': 'Status content is required'}), 400
-
-        # Delete existing status
+        # Delete existing statuses for this user
         Status.query.filter_by(user_id=session['user_id']).delete()
 
         expires_at = datetime.utcnow() + timedelta(hours=24)
+        final_content = content
 
         if status_type == 'image':
             if 'image' not in request.files:
@@ -1183,17 +1215,25 @@ def upload_status():
 
             image_file = request.files['image']
             if image_file and image_file.filename != '':
+                # Generate unique filename
                 timestamp = int(time.time())
                 filename = secure_filename(image_file.filename)
-                filename = f"status_{timestamp}_{filename}"
+                filename = f"status_{session['user_id']}_{timestamp}_{filename}"
                 filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 image_file.save(filepath)
-                content = f"uploads/{filename}"
+                final_content = f"uploads/{filename}"
+            else:
+                return jsonify({'error': 'No image file selected'}), 400
+        else:
+            # Text status validation
+            if not content:
+                return jsonify({'error': 'Status content is required'}), 400
 
+        # Create new status
         status = Status(
             user_id=session['user_id'],
-            content=content,
+            content=final_content,
             status_type=status_type,
             expires_at=expires_at
         )
@@ -1201,6 +1241,7 @@ def upload_status():
         db.session.add(status)
         db.session.commit()
 
+        # Emit socket event
         socketio.emit('status_updated', {
             'user_id': session['user_id'],
             'username': session.get('username'),
@@ -1211,31 +1252,39 @@ def upload_status():
         return jsonify({'success': True, 'status_id': status.id})
 
     except Exception as e:
-        # Return JSON even on error
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 
 
-@app.route('/status/viewers/<int:status_id>')
-def get_status_viewers(status_id):
+@app.route('/status/view/<int:user_id>')
+def view_status_page(user_id):
     if 'user_id' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
+        return redirect(url_for('login'))
     
-    status = Status.query.get_or_404(status_id)
+    status = Status.query.filter(
+        Status.user_id == user_id,
+        Status.expires_at > datetime.utcnow()
+    ).order_by(Status.created_at.desc()).first()
     
-    # Check if current user owns the status
-    if status.user_id != session['user_id']:
-        return jsonify({'error': 'Access denied'}), 403
+    if not status:
+        return "Status has expired or doesn't exist", 404
     
-    viewers = []
-    for viewer in status.viewers:
-        viewers.append({
-            'username': viewer.user.username,
-            'profile_picture': viewer.user.get_profile_picture_url(),
-            'viewed_at': viewer.viewed_at.isoformat()
-        })
+    # Mark as viewed
+    existing_view = StatusViewer.query.filter_by(
+        status_id=status.id,
+        user_id=session['user_id']
+    ).first()
     
-    return jsonify(viewers)
+    if not existing_view:
+        viewer = StatusViewer(
+            status_id=status.id,
+            user_id=session['user_id']
+        )
+        db.session.add(viewer)
+        db.session.commit()
+    
+    return render_template('view_status.html', status=status)
 
 @app.route('/status/delete', methods=['POST'])
 def delete_status():

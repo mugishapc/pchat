@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block title %}Status - {{ status.user.username }} - WhatsApp Clone{% endblock %}
+
+{% block content %}
+<div class="status-viewer-container">
+    <div class="status-viewer-header">
+        <a href="{{ url_for('status_page') }}" class="back-button">←</a>
+        <div class="user-info">
+            <img src="{{ status.user.get_profile_picture_url() or '/static/images/default-avatar.png' }}" 
+                 alt="{{ status.user.username }}" class="user-avatar">
+            <div>
+                <strong>{{ status.user.username }}</strong>
+                <span class="status-time">{{ status.created_at.strftime('%H:%M • %b %d') }}</span>
+            </div>
+        </div>
+        <button class="more-options">⋯</button>
+    </div>
+
+    <div class="status-content">
+        {% if status.status_type == 'text' %}
+            <div class="text-status">
+                <div class="status-text">{{ status.content }}</div>
+            </div>
+        {% else %}
+            <div class="image-status">
+                <img src="/static/{{ status.content }}" alt="Status Image" class="status-image">
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="status-info-panel">
+        <div class="info-item">
+            <span>Viewed by {{ status.viewers|length }} people</span>
+        </div>
+        {% if status.user_id == session['user_id'] %}
+        <div class="info-item">
+            <button onclick="showViewers({{ status.id }})" class="viewers-btn">
+                👁️ See all viewers
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Viewers Modal -->
+<div id="viewersModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Viewed by</h3>
+            <button class="close-modal" onclick="closeViewersModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="viewersList" class="viewers-list">
+                <!-- Viewers will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.status-viewer-container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: black;
+    min-height: 100vh;
+    color: white;
+}
+
+.status-viewer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background: rgba(0,0,0,0.8);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.back-button {
+    color: white;
+    text-decoration: none;
+    font-size: 1.5rem;
+    padding: 0.5rem;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+    margin-left: 1rem;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.user-info strong {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.status-time {
+    font-size: 0.8rem;
+    color: #ccc;
+}
+
+.more-options {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
+.status-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 70vh;
+    padding: 2rem;
+}
+
+.text-status {
+    background: rgba(255,255,255,0.1);
+    padding: 2rem;
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+    max-width: 80%;
+}
+
+.status-text {
+    font-size: 1.2rem;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.status-image {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.status-info-panel {
+    padding: 1rem;
+    background: rgba(0,0,0,0.8);
+    border-top: 1px solid #333;
+}
+
+.info-item {
+    margin-bottom: 0.5rem;
+}
+
+.viewers-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid #555;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.viewers-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* Modal styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin: 10% auto;
+    padding: 0;
+    width: 90%;
+    max-width: 400px;
+    border-radius: 15px;
+    color: black;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #128C7E;
+}
+
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+}
+
+.viewers-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.viewer-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.viewer-item:last-child {
+    border-bottom: none;
+}
+
+.viewer-item img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 1rem;
+}
+
+.viewer-info {
+    flex: 1;
+}
+
+.viewer-name {
+    font-weight: bold;
+    display: block;
+}
+
+.viewer-time {
+    font-size: 0.8rem;
+    color: #666;
+}
+</style>
+
+<script>
+async function showViewers(statusId) {
+    try {
+        const response = await fetch(`/status/viewers/${statusId}`);
+        if (response.ok) {
+            const viewers = await response.json();
+            displayViewers(viewers);
+        } else {
+            alert('Error loading viewers');
+        }
+    } catch (error) {
+        console.error('Error loading viewers:', error);
+        alert('Error loading viewers');
+    }
+}
+
+function displayViewers(viewers) {
+    const viewersList = document.getElementById('viewersList');
+    
+    if (viewers.length === 0) {
+        viewersList.innerHTML = '<p style="padding: 1rem; text-align: center; color: #666;">No viewers yet</p>';
+    } else {
+        viewersList.innerHTML = viewers.map(viewer => `
+            <div class="viewer-item">
+                <img src="${viewer.profile_picture || '/static/images/default-avatar.png'}" 
+                     alt="${viewer.username}">
+                <div class="viewer-info">
+                    <span class="viewer-name">${viewer.username}</span>
+                    <span class="viewer-time">Viewed at ${new Date(viewer.viewed_at).toLocaleTimeString()}</span>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    document.getElementById('viewersModal').style.display = 'block';
+}
+
+function closeViewersModal() {
+    document.getElementById('viewersModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('viewersModal');
+    if (event.target === modal) {
+        closeViewersModal();
+    }
+});
+
+// Handle ESC key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeViewersModal();
+    }
+});
+
+// Auto-close status after 15 seconds if not owned by user
+{% if status.user_id != session['user_id'] %}
+setTimeout(() => {
+    window.location.href = "{{ url_for('status_page') }}";
+}, 15000);
+{% endif %}
+</script>
+{% endblock %}

@@ -23,10 +23,16 @@
                 <div class="status-info">
                     <strong>My Status</strong>
                     <span class="status-time">
-                        Expires {{ current_user_status.expires_at.strftime('%H:%M') }}
+                        {% set time_diff = (current_user_status.expires_at - current_time).total_seconds() %}
+                        {% if time_diff > 3600 %}
+                            Expires in {{ (time_diff / 3600)|round|int }} hours
+                        {% else %}
+                            Expires in {{ (time_diff / 60)|round|int }} minutes
+                        {% endif %}
                     </span>
+                    <span class="viewer-count">{{ current_user_status.viewers|length }} viewers</span>
                 </div>
-                <button class="delete-status-btn" onclick="deleteStatus()">×</button>
+                <button class="delete-status-btn" onclick="deleteStatus()" title="Delete Status">×</button>
             </div>
             {% else %}
             <div class="add-status" onclick="openStatusModal()">
@@ -49,27 +55,28 @@
         <h3>Recent Updates</h3>
         <div class="status-list">
             {% for user in users_with_status %}
-            {% set user_status = user.get_active_status() %}
-            {% if user_status %}
-            <div class="status-item {% if user_status.id not in viewed_status_ids %}unviewed{% endif %}" 
-                 onclick="viewStatus({{ user.id }})">
-                <div class="status-avatar">
-                    <img src="{{ user.get_profile_picture_url() or '/static/images/default-avatar.png' }}" 
-                         alt="{{ user.username }}">
-                    <div class="status-indicator {% if user_status.id not in viewed_status_ids %}unviewed{% else %}viewed{% endif %}"></div>
-                </div>
-                <div class="status-info">
-                    <strong>{{ user.username }}</strong>
-                    <span class="status-time">
-                        {{ user_status.created_at.strftime('%H:%M') }}
-                    </span>
-                </div>
-            </div>
-            {% endif %}
+                {% set user_status = user.statuses|selectattr('expires_at', 'gt', current_time)|list %}
+                {% if user_status %}
+                    {% set latest_status = user_status|sort(attribute='created_at', reverse=true)|first %}
+                    <div class="status-item {% if latest_status.id not in viewed_status_ids %}unviewed{% endif %}" 
+                         onclick="viewStatus({{ user.id }})">
+                        <div class="status-avatar">
+                            <img src="{{ user.get_profile_picture_url() or '/static/images/default-avatar.png' }}" 
+                                 alt="{{ user.username }}">
+                            <div class="status-indicator {% if latest_status.id not in viewed_status_ids %}unviewed{% else %}viewed{% endif %}"></div>
+                        </div>
+                        <div class="status-info">
+                            <strong>{{ user.username }}</strong>
+                            <span class="status-time">
+                                {{ latest_status.created_at.strftime('%H:%M') }}
+                            </span>
+                        </div>
+                    </div>
+                {% endif %}
             {% else %}
-            <div class="no-status">
-                <p>No status updates from contacts</p>
-            </div>
+                <div class="no-status">
+                    <p>No status updates from contacts</p>
+                </div>
             {% endfor %}
         </div>
     </div>
@@ -85,10 +92,10 @@
         <div class="modal-body">
             <form id="statusForm" enctype="multipart/form-data">
                 <div class="status-options">
-                    <button type="button" class="status-option-btn" onclick="showTextStatus()">
+                    <button type="button" class="status-option-btn active" id="textOptionBtn" onclick="showTextStatus()">
                         📝 Text Status
                     </button>
-                    <button type="button" class="status-option-btn" onclick="showImageStatus()">
+                    <button type="button" class="status-option-btn" id="imageOptionBtn" onclick="showImageStatus()">
                         🖼️ Image Status
                     </button>
                 </div>
@@ -99,7 +106,13 @@
                 </div>
                 
                 <div id="imageStatusSection" class="status-section-input" style="display: none;">
-                    <input type="file" id="statusImage" accept="image/*">
+                    <div class="file-input-container">
+                        <label for="statusImage" class="file-label">
+                            📷 Choose Image
+                        </label>
+                        <input type="file" id="statusImage" accept="image/*" style="display: none;">
+                        <span id="fileName">No file chosen</span>
+                    </div>
                     <div id="imagePreview" class="image-preview"></div>
                 </div>
                 
@@ -109,6 +122,12 @@
             </form>
         </div>
     </div>
+</div>
+
+<!-- Loading Spinner -->
+<div id="loadingSpinner" class="loading-spinner" style="display: none;">
+    <div class="spinner"></div>
+    <p>Posting status...</p>
 </div>
 
 <style>
@@ -125,6 +144,9 @@
     padding: 1rem;
     background: #128C7E;
     color: white;
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
 .back-button {
@@ -132,6 +154,7 @@
     text-decoration: none;
     font-size: 1.5rem;
     margin-right: 1rem;
+    padding: 0.5rem;
 }
 
 .status-section {
@@ -139,13 +162,22 @@
     border-bottom: 1px solid #e0e0e0;
 }
 
+.status-section h3 {
+    margin: 0 0 1rem 0;
+    color: #128C7E;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
 .status-item {
     display: flex;
     align-items: center;
-    padding: 0.5rem;
+    padding: 0.75rem;
     cursor: pointer;
     border-radius: 8px;
     margin-bottom: 0.5rem;
+    transition: background-color 0.2s;
 }
 
 .status-item:hover {
@@ -166,12 +198,13 @@
     height: 50px;
     border-radius: 50%;
     object-fit: cover;
+    border: 2px solid #ddd;
 }
 
 .status-indicator {
     position: absolute;
-    bottom: 0;
-    right: 0;
+    bottom: 2px;
+    right: 2px;
     width: 15px;
     height: 15px;
     border-radius: 50%;
@@ -187,29 +220,47 @@
 }
 
 .status-indicator.viewed {
-    background: #666;
+    background: #999;
 }
 
 .status-info {
     flex: 1;
 }
 
+.status-info strong {
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
 .status-time {
     color: #666;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
+}
+
+.viewer-count {
+    display: block;
+    color: #128C7E;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
 }
 
 .add-status {
     display: flex;
     align-items: center;
-    padding: 0.5rem;
+    padding: 0.75rem;
     cursor: pointer;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+}
+
+.add-status:hover {
+    background: #f5f5f5;
 }
 
 .add-status-icon {
     position: absolute;
-    bottom: 0;
-    right: 0;
+    bottom: 2px;
+    right: 2px;
     width: 20px;
     height: 20px;
     background: #128C7E;
@@ -219,6 +270,7 @@
     align-items: center;
     justify-content: center;
     font-size: 0.8rem;
+    font-weight: bold;
 }
 
 .delete-status-btn {
@@ -227,6 +279,18 @@
     font-size: 1.5rem;
     cursor: pointer;
     color: #666;
+    padding: 0.5rem;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-status-btn:hover {
+    background: #ffebee;
+    color: #d32f2f;
 }
 
 /* Modal styles */
@@ -239,22 +303,30 @@
     width: 100%;
     height: 100%;
     background-color: rgba(0,0,0,0.5);
+    backdrop-filter: blur(5px);
 }
 
 .modal-content {
     background-color: white;
     margin: 10% auto;
-    padding: 20px;
+    padding: 0;
     width: 90%;
     max-width: 500px;
-    border-radius: 10px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 }
 
 .modal-header {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    padding: 1.5rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #128C7E;
 }
 
 .close-modal {
@@ -262,38 +334,97 @@
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
+    color: #666;
+    padding: 0.5rem;
+}
+
+.close-modal:hover {
+    color: #333;
+}
+
+.modal-body {
+    padding: 1.5rem;
 }
 
 .status-options {
     display: flex;
     gap: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 .status-option-btn {
     flex: 1;
     padding: 1rem;
-    border: 1px solid #ddd;
+    border: 2px solid #e0e0e0;
     border-radius: 8px;
     background: white;
     cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s;
 }
 
 .status-option-btn:hover {
-    background: #f5f5f5;
+    border-color: #128C7E;
+}
+
+.status-option-btn.active {
+    border-color: #128C7E;
+    background: #e8f5f3;
+    color: #128C7E;
 }
 
 .status-section-input {
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 #statusText {
     width: 100%;
-    height: 100px;
-    padding: 0.5rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    height: 120px;
+    padding: 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
     resize: vertical;
+    font-family: inherit;
+    font-size: 1rem;
+}
+
+#statusText:focus {
+    outline: none;
+    border-color: #128C7E;
+}
+
+#charCount {
+    display: block;
+    text-align: right;
+    margin-top: 0.5rem;
+    color: #666;
+    font-size: 0.8rem;
+}
+
+.file-input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.file-label {
+    padding: 1rem;
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.3s;
+}
+
+.file-label:hover {
+    border-color: #128C7E;
+    color: #128C7E;
+}
+
+#fileName {
+    font-size: 0.9rem;
+    color: #666;
+    text-align: center;
 }
 
 .image-preview {
@@ -303,41 +434,119 @@
 
 .image-preview img {
     max-width: 100%;
-    max-height: 200px;
+    max-height: 300px;
     border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .btn-primary {
     background: #128C7E;
     color: white;
     border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 4px;
+    padding: 1rem 2rem;
+    border-radius: 8px;
     cursor: pointer;
     width: 100%;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: background-color 0.3s;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
     background: #0c6b5f;
+}
+
+.btn-primary:disabled {
+    background: #ccc;
+    cursor: not-allowed;
 }
 
 .no-status {
     text-align: center;
     color: #666;
     padding: 2rem;
+    font-style: italic;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    color: white;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #128C7E;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Notification */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #25D366;
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10000;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 </style>
 
 <script>
+// Current status type
+let currentStatusType = 'text';
+
 // Character count for text status
 document.getElementById('statusText').addEventListener('input', function() {
-    const remaining = 140 - this.value.length;
-    document.getElementById('charCount').textContent = remaining + ' characters remaining';
+    const maxLength = 140;
+    const currentLength = this.value.length;
+    const remaining = maxLength - currentLength;
+    const charCount = document.getElementById('charCount');
+    charCount.textContent = remaining + ' characters remaining';
+    
+    // Change color when approaching limit
+    if (remaining < 20) {
+        charCount.style.color = 'red';
+    } else {
+        charCount.style.color = '#666';
+    }
 });
 
 function openStatusModal() {
     document.getElementById('statusModal').style.display = 'block';
-    // Default to text status
     showTextStatus();
 }
 
@@ -349,56 +558,107 @@ function closeStatusModal() {
 function showTextStatus() {
     document.getElementById('textStatusSection').style.display = 'block';
     document.getElementById('imageStatusSection').style.display = 'none';
+    
+    // Update button states
+    document.getElementById('textOptionBtn').classList.add('active');
+    document.getElementById('imageOptionBtn').classList.remove('active');
+    
+    currentStatusType = 'text';
 }
 
 function showImageStatus() {
     document.getElementById('textStatusSection').style.display = 'none';
     document.getElementById('imageStatusSection').style.display = 'block';
     
-    // Handle image preview
-    document.getElementById('statusImage').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('imagePreview').innerHTML = 
-                    `<img src="${e.target.result}" alt="Preview">`;
-            };
-            reader.readAsDataURL(file);
-        }
-    });
+    // Update button states
+    document.getElementById('imageOptionBtn').classList.add('active');
+    document.getElementById('textOptionBtn').classList.remove('active');
+    
+    currentStatusType = 'image';
 }
 
 function resetStatusForm() {
     document.getElementById('statusForm').reset();
     document.getElementById('imagePreview').innerHTML = '';
+    document.getElementById('fileName').textContent = 'No file chosen';
     document.getElementById('charCount').textContent = '140 characters remaining';
+    document.getElementById('charCount').style.color = '#666';
+    showTextStatus(); // Reset to text status
 }
+
+// Handle file input change
+document.getElementById('statusImage').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const fileName = document.getElementById('fileName');
+    const imagePreview = document.getElementById('imagePreview');
+    
+    if (file) {
+        fileName.textContent = file.name;
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            showNotification('Please select a valid image file', 'error');
+            this.value = '';
+            fileName.textContent = 'No file chosen';
+            imagePreview.innerHTML = '';
+            return;
+        }
+        
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            showNotification('Image size should be less than 5MB', 'error');
+            this.value = '';
+            fileName.textContent = 'No file chosen';
+            imagePreview.innerHTML = '';
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            imagePreview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        fileName.textContent = 'No file chosen';
+        imagePreview.innerHTML = '';
+    }
+});
 
 // Handle status form submission
 document.getElementById('statusForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
+    const submitBtn = document.getElementById('submitStatusBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Posting...';
+    
+    showLoadingSpinner(true);
+    
     const formData = new FormData();
-    const statusType = document.getElementById('imageStatusSection').style.display !== 'none' ? 'image' : 'text';
     
-    formData.append('type', statusType);
-    
-    if (statusType === 'text') {
+    if (currentStatusType === 'text') {
         const textContent = document.getElementById('statusText').value.trim();
         if (!textContent) {
-            alert('Please enter status text');
+            showNotification('Please enter status text', 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Post Status';
+            showLoadingSpinner(false);
             return;
         }
+        formData.append('type', 'text');
         formData.append('content', textContent);
     } else {
         const imageFile = document.getElementById('statusImage').files[0];
         if (!imageFile) {
-            alert('Please select an image');
+            showNotification('Please select an image', 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Post Status';
+            showLoadingSpinner(false);
             return;
         }
+        formData.append('type', 'image');
         formData.append('image', imageFile);
-        formData.append('content', 'image'); // Add content field for image too
+        formData.append('content', 'image_upload');
     }
     
     try {
@@ -410,16 +670,23 @@ document.getElementById('statusForm').addEventListener('submit', async function(
         const result = await response.json();
         
         if (result.success) {
+            showNotification('Status posted successfully!', 'success');
             closeStatusModal();
-            // Show success message and reload
-            alert('Status posted successfully!');
-            window.location.href = '/status';
+            
+            // Reload after a short delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         } else {
-            alert('Error uploading status: ' + (result.error || 'Unknown error'));
+            throw new Error(result.error || 'Failed to post status');
         }
     } catch (error) {
-        alert('Error uploading status: ' + error.message);
         console.error('Upload error:', error);
+        showNotification('Error: ' + error.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Post Status';
+        showLoadingSpinner(false);
     }
 });
 
@@ -429,19 +696,32 @@ async function viewStatus(userId) {
         const response = await fetch(`/status/user/${userId}`);
         if (response.ok) {
             const status = await response.json();
-            alert(`Status: ${status.content}`); // Simple alert for now
+            // Open status viewer modal or page
+            openStatusViewer(status);
         } else {
             const error = await response.json();
-            alert('Error loading status: ' + error.error);
+            showNotification('Error loading status: ' + error.error, 'error');
         }
     } catch (error) {
-        alert('Error loading status: ' + error.message);
+        showNotification('Error loading status: ' + error.message, 'error');
         console.error('Error loading status:', error);
     }
 }
 
+// Simple status viewer (you can enhance this with a proper modal)
+function openStatusViewer(status) {
+    if (status.type === 'text') {
+        alert(`Status from ${status.user.username}:\n\n"${status.content}"`);
+    } else {
+        // For image status, open in new tab or modal
+        window.open(status.content_url || `/static/${status.content}`, '_blank');
+    }
+}
+
 async function deleteStatus() {
-    if (confirm('Are you sure you want to delete your status?')) {
+    if (confirm('Are you sure you want to delete your status? This action cannot be undone.')) {
+        showLoadingSpinner(true);
+        
         try {
             const response = await fetch('/status/delete', {
                 method: 'POST',
@@ -453,16 +733,41 @@ async function deleteStatus() {
             const result = await response.json();
             
             if (result.success) {
-                alert('Status deleted successfully!');
-                location.reload();
+                showNotification('Status deleted successfully!', 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
             } else {
-                alert('Error deleting status');
+                throw new Error(result.error || 'Failed to delete status');
             }
         } catch (error) {
-            alert('Error deleting status: ' + error.message);
-            console.error(error);
+            showNotification('Error deleting status: ' + error.message, 'error');
+            console.error('Delete error:', error);
+        } finally {
+            showLoadingSpinner(false);
         }
     }
+}
+
+// Utility functions
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = 'notification';
+    notification.style.background = type === 'error' ? '#f44336' : 
+                                  type === 'success' ? '#25D366' : '#128C7E';
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 3000);
+}
+
+function showLoadingSpinner(show) {
+    const spinner = document.getElementById('loadingSpinner');
+    spinner.style.display = show ? 'flex' : 'none';
 }
 
 // Close modal when clicking outside
@@ -470,6 +775,24 @@ window.addEventListener('click', function(event) {
     const modal = document.getElementById('statusModal');
     if (event.target === modal) {
         closeStatusModal();
+    }
+});
+
+// Handle ESC key to close modal
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeStatusModal();
+    }
+});
+
+// Socket.io for real-time updates
+socket.on('status_updated', function(data) {
+    if (data.user_id !== {{ session['user_id'] }}) {
+        showNotification(`${data.username} posted a new status!`, 'info');
+        // Reload after a short delay to see the new status
+        setTimeout(() => {
+            window.location.reload();
+        }, 2000);
     }
 });
 </script>
