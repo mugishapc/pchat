@@ -191,3 +191,42 @@ if (isMobileDevice()) {
     window.addEventListener('resize', setVH);
     window.addEventListener('orientationchange', setVH);
 }
+
+
+// Add this to your existing JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+    // Improve touch scrolling on mobile
+    const sidebarContent = document.querySelector('.sidebar-content');
+    
+    if (sidebarContent) {
+        // Prevent default on touch events to improve scrolling
+        sidebarContent.addEventListener('touchstart', function(e) {
+            if (e.touches.length > 1) {
+                e.preventDefault(); // Prevent zoom
+            }
+        }, { passive: false });
+        
+        sidebarContent.addEventListener('touchmove', function(e) {
+            // Allow natural scrolling
+        }, { passive: true });
+        
+        // Improve click/tap responsiveness
+        sidebarContent.addEventListener('click', function(e) {
+            if (e.target.classList.contains('user-item') || 
+                e.target.classList.contains('conversation-item')) {
+                e.preventDefault();
+                // Your existing click handler code here
+            }
+        });
+    }
+    
+    // Fix for mobile viewport height
+    function setVH() {
+        let vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+    
+    setVH();
+    window.addEventListener('resize', setVH);
+    window.addEventListener('orientationchange', setVH);
+});

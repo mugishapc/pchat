@@ -1797,3 +1797,160 @@ body.keyboard-visible {
         display: none !important;
     }
 }
+
+/* Improved mobile scrolling for user list */
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    overscroll-behavior: contain; /* Prevent scroll chaining */
+}
+
+/* Ensure proper scrolling on mobile */
+#users-list, #conversations-list {
+    list-style: none;
+    min-height: 0; /* Important for flex scrolling */
+}
+
+.user-item, .conversation-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    text-decoration: none;
+    color: var(--text-dark);
+    border-bottom: 1px solid var(--border-light);
+    position: relative;
+    transition: background 0.2s;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+    touch-action: manipulation; /* Improve touch responsiveness */
+}
+
+/* Fix for mobile viewport height issues */
+.sidebar {
+    width: 380px;
+    background-color: white;
+    border-right: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Ensure full height */
+}
+
+/* Mobile-specific scrolling improvements */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        height: 40%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-light);
+        min-height: 200px; /* Minimum height for scrolling */
+    }
+    
+    .sidebar-content {
+        height: 100%;
+        overflow-y: scroll;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Fix for iOS Safari */
+    @supports (-webkit-touch-callout: none) {
+        .sidebar-content {
+            height: -webkit-fill-available;
+        }
+    }
+    
+    /* Prevent body scroll when scrolling user list */
+    .sidebar-content:active,
+    .sidebar-content:focus {
+        touch-action: pan-y;
+    }
+}
+
+/* Enhanced scrollbar styling for better visibility */
+.sidebar-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Force hardware acceleration for smooth scrolling */
+.sidebar-content {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+}
+
+/* Prevent text selection during scroll */
+.user-item, .conversation-item {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Improved touch feedback */
+.user-item:active, .conversation-item:active {
+    background-color: #f0f0f0;
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+}
+
+/* Fix for Android Chrome scrolling */
+.sidebar-content {
+    overflow-y: overlay; /* Better scrolling on Android */
+}
+
+/* Ensure proper stacking context */
+.chat-layout {
+    display: flex;
+    height: calc(100% - 60px);
+    position: relative;
+    z-index: 1;
+}
+
+/* Additional mobile landscape support */
+@media (max-height: 500px) and (orientation: landscape) {
+    .sidebar {
+        height: 60%; /* More height in landscape */
+        max-height: 300px;
+    }
+    
+    .sidebar-content {
+        max-height: 100%;
+    }
+}
+
+/* Very small devices */
+@media (max-width: 480px) {
+    .sidebar {
+        height: 45%; /* Slightly more height on very small screens */
+    }
+    
+    .user-item, .conversation-item {
+        padding: 12px 15px; /* Larger touch targets */
+        min-height: 60px; /* Minimum touch target size */
+    }
+}
+
+/* Fix for scroll momentum on iOS */
+.sidebar-content {
+    overflow-y: scroll; /* Force scrollbar */
+    -webkit-overflow-scrolling: touch; /* Momentum scrolling */
+}
+
+/* Prevent bounce effect on iOS */
+.sidebar-content {
+    position: relative;
+}
