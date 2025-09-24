@@ -17,6 +17,7 @@ from pywebpush import webpush, WebPushException
 import time
 from werkzeug.utils import secure_filename
 from flask import send_from_directory
+import requests
 
 
 # Load environment variables from .env file
@@ -389,42 +390,155 @@ def terms():
         return redirect(url_for('login'))
     return render_template('terms.html', username=session.get('username'))
 
-# API routes
+# API routes with offline support
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    """Send a message with offline support"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    
+    data = request.get_json()
+    content = data.get('content', '').strip()
+    conversation_id = data.get('conversation_id')
+    temp_id = data.get('temp_id')  # Temporary ID for offline messages
+    
+    if not content or not conversation_id:
+        return jsonify({'success': False, 'error': 'Missing content or conversation ID'}), 400
+    
+    try:
+        # Check if conversation exists and user has access
+        conversation = Conversation.query.get(conversation_id)
+        if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+            return jsonify({'success': False, 'error': 'Conversation not found'}), 404
+        
+        # Get other user ID
+        other_user_id = conversation.user1_id if conversation.user1_id != session['user_id'] else conversation.user2_id
+        
+        # Insert message into database
+        message = Message(
+            content=content,
+            message_type='text',
+            user_id=session['user_id'],
+            conversation_id=conversation_id
+        )
+        db.session.add(message)
+        db.session.flush()  # Get message ID before commit
+        
+        # Update conversation
+        conversation.last_message_id = message.id
+        if conversation.user1_id == session['user_id']:
+            conversation.unread_count_user2 += 1
+        else:
+            conversation.unread_count_user1 += 1
+        
+        db.session.commit()
+        
+        # Prepare message data for Socket.IO
+        current_user = User.query.get(session['user_id'])
+        message_data = {
+            'id': message.id,
+            'conversation_id': conversation_id,
+            'user_id': session['user_id'],
+            'username': session['username'],
+            'content': content,
+            'type': 'text',
+            'timestamp': message.timestamp.isoformat(),
+            'temp_id': temp_id,
+            'is_read': message.is_read,
+            'user_profile_picture': current_user.get_profile_picture_url(),
+            'status': 'sent'  # New status field
+        }
+        
+        # Emit to conversation room
+        socketio.emit('new_message', message_data, room=f'conversation_{conversation_id}')
+        
+        # Emit delivery status to sender
+        socketio.emit('message_status_update', {
+            'message_id': message.id,
+            'temp_id': temp_id,
+            'status': 'sent'
+        }, room=request.sid)
+        
+        # Check if other user is online and emit delivered status
+        other_user_sid = get_user_sid(other_user_id)
+        if other_user_sid:
+            socketio.emit('message_status_update', {
+                'message_id': message.id,
+                'status': 'delivered'
+            }, room=other_user_sid)
+        
+        # Update conversation list for both users
+        update_conversation_list(conversation, session['user_id'])
+        update_conversation_list(conversation, other_user_id)
+        
+        # Send push notification to the other user
+        other_user = User.query.get(other_user_id)
+        if other_user and other_user.push_subscription:
+            try:
+                socketio.start_background_task(
+                    send_push_notification,
+                    other_user.push_subscription,
+                    f"New message from {session['username']}",
+                    content,
+                    conversation_id
+                )
+            except Exception as e:
+                print(f"Failed to send push notification: {e}")
+        
+        return jsonify({'success': True, 'message_id': message.id})
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error sending message: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
 @app.route('/messages/<int:conversation_id>')
 def get_messages(conversation_id):
+    """Get messages for a conversation with offline support"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
-    # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
-    if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
-        return jsonify({'error': 'Access denied'}), 403
-    
-    # Mark messages as read
-    if conversation.user1_id == session['user_id']:
-        conversation.unread_count_user1 = 0
-    else:
-        conversation.unread_count_user2 = 0
-    
-    # Update read status for messages
-    Message.query.filter_by(conversation_id=conversation_id, is_read=False).update({Message.is_read: True})
-    db.session.commit()
-    
-    messages = Message.query.filter_by(conversation_id=conversation_id, is_deleted=False).order_by(Message.timestamp.asc()).all()
-    message_list = []
-    for msg in messages:
-        message_list.append({
-            'id': msg.id,
-            'content': msg.content,
-            'type': msg.message_type,
-            'username': msg.user.username,
-            'user_id': msg.user_id,
-            'timestamp': msg.timestamp.isoformat(),
-            'is_read': msg.is_read,
-            'user_profile_picture': msg.user.get_profile_picture_url()
-        })
-    
-    return jsonify(message_list)
+    try:
+        # Check if user is part of this conversation
+        conversation = Conversation.query.get(conversation_id)
+        if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # Mark messages as read
+        if conversation.user1_id == session['user_id']:
+            conversation.unread_count_user1 = 0
+        else:
+            conversation.unread_count_user2 = 0
+        
+        # Update read status for messages
+        Message.query.filter_by(conversation_id=conversation_id, is_read=False).update({Message.is_read: True})
+        db.session.commit()
+        
+        messages = Message.query.filter_by(conversation_id=conversation_id, is_deleted=False).order_by(Message.timestamp.asc()).all()
+        message_list = []
+        for msg in messages:
+            message_list.append({
+                'id': msg.id,
+                'content': msg.content,
+                'type': msg.message_type,
+                'username': msg.user.username,
+                'user_id': msg.user_id,
+                'timestamp': msg.timestamp.isoformat(),
+                'is_read': msg.is_read,
+                'user_profile_picture': msg.user.get_profile_picture_url(),
+                'status': 'delivered' if msg.is_read else 'sent'  # Add status field
+            })
+        
+        return jsonify(message_list)
+        
+    except Exception as e:
+        print(f"Error getting messages: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/online-check')
+def online_check():
+    """Simple endpoint for service worker to check online status"""
+    return jsonify({'status': 'online'})
 
 @app.route('/conversation/<int:other_user_id>', methods=['POST'])
 def create_conversation(other_user_id):
@@ -456,7 +570,7 @@ def delete_conversation(conversation_id):
         return jsonify({'error': 'Not authenticated'}), 401
     
     # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
+    conversation = Conversation.query.get(conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return jsonify({'error': 'Access denied'}), 403
     
@@ -475,7 +589,7 @@ def delete_message(message_id):
         return jsonify({'error': 'Not authenticated'}), 401
     
     # Get the message
-    message = db.session.get(Message, message_id)
+    message = Message.query.get(message_id)
     if not message:
         return jsonify({'error': 'Message not found'}), 404
     
@@ -501,7 +615,7 @@ def upload_audio(conversation_id):
         return jsonify({'error': 'Not authenticated'}), 401
 
     # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
+    conversation = Conversation.query.get(conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return jsonify({'error': 'Access denied'}), 403
 
@@ -509,6 +623,8 @@ def upload_audio(conversation_id):
         return jsonify({'error': 'No audio file provided'}), 400
 
     audio_file = request.files['audio']
+    temp_id = request.form.get('temp_id')  # Get temp_id for offline support
+    
     if audio_file.filename == '':
         return jsonify({'error': 'No audio file selected'}), 400
 
@@ -552,10 +668,19 @@ def upload_audio(conversation_id):
             'conversation_id': conversation_id,
             'is_read': message.is_read,
             'user_profile_picture': current_user.get_profile_picture_url(),
-            'duration': float(request.form.get('duration', 0))
+            'duration': float(request.form.get('duration', 0)),
+            'temp_id': temp_id,
+            'status': 'sent'
         }
 
         socketio.emit('new_message', message_data, room=f'conversation_{conversation_id}')
+
+        # Emit status update
+        socketio.emit('message_status_update', {
+            'message_id': message.id,
+            'temp_id': temp_id,
+            'status': 'sent'
+        }, room=request.sid)
 
         update_conversation_list(conversation, session['user_id'])
         update_conversation_list(conversation, other_user.id)
@@ -577,6 +702,7 @@ def upload_audio(conversation_id):
     except Exception as e:
         print(f"Error uploading audio: {e}")
         return jsonify({'error': 'Failed to process audio'}), 500
+
 def update_conversation_list(conversation, user_id):
     other_user = conversation.user1 if conversation.user1_id != user_id else conversation.user2
     unread_count = conversation.unread_count_user1 if conversation.user1_id == user_id else conversation.unread_count_user2
@@ -592,7 +718,6 @@ def update_conversation_list(conversation, user_id):
         'other_user_bio': other_user.bio
     }, room=f'user_{user_id}')
 
-
 # Save push subscription
 @app.route('/save_subscription', methods=['POST'])
 def save_subscription():
@@ -603,7 +728,7 @@ def save_subscription():
     if not subscription:
         return jsonify({'error': 'No subscription provided'}), 400
     
-    user = db.session.get(User, session['user_id'])
+    user = User.query.get(session['user_id'])
     if user:
         user.push_subscription = json.dumps(subscription)
         db.session.commit()
@@ -682,9 +807,7 @@ def send_push_notification(subscription_json, title, body, conversation_id):
     except Exception as e:
         print(f"Error sending push notification: {e}")
 
-# SocketIO events
-
-
+# SocketIO events with offline support
 @socketio.on('connect')
 def handle_connect():
     if 'user_id' in session:
@@ -735,7 +858,6 @@ def handle_connect():
         
         socketio.start_background_task(delayed_offline)
 
-
 @socketio.on('disconnect')
 def handle_disconnect():
     if 'user_id' in session:
@@ -758,8 +880,6 @@ def handle_disconnect():
 
         socketio.start_background_task(delayed_offline)
 
-
-
 @socketio.on('user_activity')
 def handle_user_activity():
     if 'user_id' in session:
@@ -780,9 +900,36 @@ def handle_join_conversation(data):
         return
     
     # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
+    conversation = Conversation.query.get(conversation_id)
     if conversation and (conversation.user1_id == session['user_id'] or conversation.user2_id == session['user_id']):
         join_room(f'conversation_{conversation_id}')
+        
+        # Mark messages as delivered/read
+        other_user_id = conversation.user1_id if conversation.user1_id != session['user_id'] else conversation.user2_id
+        
+        # Mark messages as delivered
+        messages = Message.query.filter_by(
+            conversation_id=conversation_id,
+            user_id=other_user_id,
+            is_read=False
+        ).all()
+        
+        for message in messages:
+            # Emit delivered status
+            emit('message_status_update', {
+                'message_id': message.id,
+                'status': 'delivered'
+            }, room=f'user_{session["user_id"]}')
+            
+            # If user is actively viewing, mark as read
+            message.is_read = True
+            db.session.commit()
+            
+            emit('message_status_update', {
+                'message_id': message.id,
+                'status': 'read'
+            }, room=f'user_{other_user_id}')
+        
         emit('joined_conversation', {'conversation_id': conversation_id})
 
 @socketio.on('leave_conversation')
@@ -807,7 +954,7 @@ def handle_typing_start(data):
         return
     
     # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
+    conversation = Conversation.query.get(conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
     
@@ -835,7 +982,7 @@ def handle_typing_stop(data):
         return
     
     # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
+    conversation = Conversation.query.get(conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
     
@@ -861,7 +1008,7 @@ def handle_recording_start(data):
         return
     
     # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
+    conversation = Conversation.query.get(conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
     
@@ -889,7 +1036,7 @@ def handle_recording_stop(data):
         return
     
     # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
+    conversation = Conversation.query.get(conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
     
@@ -907,6 +1054,7 @@ def handle_recording_stop(data):
 
 @socketio.on('send_message')
 def handle_message(data):
+    """Legacy message handler - now uses HTTP API for offline support"""
     if 'user_id' not in session:
         return
     
@@ -916,8 +1064,36 @@ def handle_message(data):
     if not content or not conversation_id:
         return
     
+    # For offline support, we now use the HTTP API
+    # This socket event is maintained for backward compatibility
+    try:
+        response = requests.post(f'http://localhost:5000/send_message', json={
+            'content': content,
+            'conversation_id': conversation_id
+        }, cookies=request.cookies)
+    except:
+        # If HTTP request fails, fall back to original behavior
+        handle_message_fallback(data)
+
+def handle_message_fallback(data):
+    """Fallback message handler when HTTP API is unavailable"""
+    if 'user_id' not in session:
+        return
+    
+    content = data.get('content', '').strip()
+    conversation_id = data.get('conversation_id')
+    
+    if not content or not conversation_id:
+        return
+    
+    content = data.get('content', '').strip()
+    conversation_id = data.get('conversation_id')
+    
+    if not content or not conversation_id:
+        return
+    
     # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
+    conversation = Conversation.query.get(conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
     
@@ -966,7 +1142,8 @@ def handle_message(data):
         'timestamp': message.timestamp.isoformat(),
         'conversation_id': conversation_id,
         'is_read': message.is_read,
-        'user_profile_picture': current_user.get_profile_picture_url()
+        'user_profile_picture': current_user.get_profile_picture_url(),
+        'status': 'sent'
     }, room=f'conversation_{conversation_id}')
     
     # Update conversation list for both users
@@ -994,7 +1171,7 @@ def handle_message_deleted(data):
     conversation_id = data.get('conversation_id')
     
     # Check if user is part of this conversation
-    conversation = db.session.get(Conversation, conversation_id)
+    conversation = Conversation.query.get(conversation_id)
     if not conversation or (conversation.user1_id != session['user_id'] and conversation.user2_id != session['user_id']):
         return
     
@@ -1003,6 +1180,36 @@ def handle_message_deleted(data):
         'message_id': message_id,
         'conversation_id': conversation_id
     }, room=f'conversation_{conversation_id}')
+
+@socketio.on('message_status_update')
+def handle_message_status_update(data):
+    """Handle message status updates (delivered, read)"""
+    if 'user_id' not in session:
+        return
+    
+    message_id = data.get('message_id')
+    status = data.get('status')
+    
+    if not message_id or not status:
+        return
+    
+    # Update message status in database
+    message = Message.query.get(message_id)
+    if message and message.conversation:
+        # Verify user has access to this conversation
+        if (message.conversation.user1_id == session['user_id'] or 
+            message.conversation.user2_id == session['user_id']):
+            
+            if status == 'read':
+                message.is_read = True
+            
+            db.session.commit()
+            
+            # Emit status update to relevant users
+            emit('message_status_update', {
+                'message_id': message_id,
+                'status': status
+            }, room=f'conversation_{message.conversation_id}')
 
 # Handle profile updates
 @socketio.on('profile_updated')
@@ -1030,7 +1237,7 @@ def delete_account():
         return jsonify({'error': 'Not authenticated'}), 401
     
     user_id = session['user_id']
-    user = db.session.get(User, user_id)
+    user = User.query.get(user_id)
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -1102,51 +1309,22 @@ def chat(conversation_id):
                          current_user=User.query.get(user_id),
                          vapid_public_key=app.config['VAPID_PUBLIC_KEY'])
 
-# FIXED: This catch-all route should be the VERY LAST route
-@app.route('/<path:path>')
-def catch_all(path):
-    known_routes = ['login', 'register', 'chat', 'offline', 'settings', 'edit_profile', 'about_us', 'terms']
-    if path in known_routes:
-        return redirect(url_for(path))
-    return render_template('base.html')
+# Helper function to get user's socket ID
+def get_user_sid(user_id):
+    """Get the socket ID for a user"""
+    for sid, user_data in socketio.server.manager.rooms.get('/').items():
+        if user_data.get('user_id') == user_id:
+            return sid
+    return None
 
+def update_user_activity(user_id):
+    """Update user's last seen timestamp"""
+    user = User.query.get(user_id)
+    if user:
+        user.last_seen = datetime.utcnow()
+        db.session.commit()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Status routes
-
+# Status routes (keep your existing status routes)
 @app.route('/status')
 def status_page():
     if 'user_id' not in session:

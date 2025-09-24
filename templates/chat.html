@@ -39,6 +39,11 @@
                     <button id="stop-recording-btn" class="stop-btn">➤</button>
                 </div>
             </div>
+            
+            <!-- Offline Status Indicator -->
+            <div id="offline-indicator" class="offline-indicator" style="display: none;">
+                <span>📡 Offline - Messages will be sent when connection is restored</span>
+            </div>
         </div>
     </div>
     
@@ -65,6 +70,9 @@
         let recordingSeconds = 0;
         let typingTimer = null;
         let typingIndicatorTimer = null;
+        let isOnline = navigator.onLine;
+        let pendingMessages = new Map(); // Store pending messages with their temporary IDs
+        let syncInProgress = false;
         
         // DOM elements
         const chatMessages = document.getElementById('chat-messages');
@@ -77,11 +85,41 @@
         const stopRecordingBtn = document.getElementById('stop-recording-btn');
         const deleteConversationBtn = document.getElementById('delete-conversation-btn');
         const userActivityIndicator = document.getElementById('user-activity-indicator');
+        const offlineIndicator = document.getElementById('offline-indicator');
         
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', function() {
             checkAuthStatus();
+            setupNetworkMonitoring();
+            loadPendingMessages();
         });
+        
+        function setupNetworkMonitoring() {
+            // Listen for online/offline events
+            window.addEventListener('online', function() {
+                console.log('Connection restored');
+                isOnline = true;
+                updateOnlineStatus();
+                syncPendingMessages();
+            });
+            
+            window.addEventListener('offline', function() {
+                console.log('Connection lost');
+                isOnline = false;
+                updateOnlineStatus();
+            });
+            
+            // Initial status update
+            updateOnlineStatus();
+        }
+        
+        function updateOnlineStatus() {
+            if (isOnline) {
+                offlineIndicator.style.display = 'none';
+            } else {
+                offlineIndicator.style.display = 'block';
+            }
+        }
         
         function checkAuthStatus() {
             fetch('/check_auth', {
@@ -103,37 +141,62 @@
             })
             .catch(error => {
                 console.error('Auth check error:', error);
-                window.location.href = '/login';
+                // If offline and auth fails, try to continue with cached data
+                if (!isOnline) {
+                    currentUserId = 'offline-user'; // Temporary ID for offline mode
+                    loadMessages();
+                    setupChatEvents();
+                } else {
+                    window.location.href = '/login';
+                }
             });
         }
         
         function initializeSocket() {
             // Connect to Socket.IO server
             socket = io({
-                transports: ['websocket', 'polling']
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
             });
             
             // Socket event handlers
             socket.on('connect', function() {
                 console.log('Connected to server');
+                isOnline = true;
+                updateOnlineStatus();
                 
                 // Join the conversation room
                 socket.emit('join_conversation', {conversation_id: currentConversationId});
                 
+                // Sync pending messages
+                syncPendingMessages();
+                
                 // Send periodic activity pings to stay online
                 setInterval(() => {
-                    socket.emit('user_activity');
+                    if (isOnline) {
+                        socket.emit('user_activity');
+                    }
                 }, 15000);
             });
             
             socket.on('new_message', function(data) {
                 if (data.conversation_id === currentConversationId) {
                     addMessageToChat(data);
+                    // If this is a pending message we sent, remove it from pending
+                    if (data.temp_id && pendingMessages.has(data.temp_id)) {
+                        pendingMessages.delete(data.temp_id);
+                        savePendingMessages();
+                    }
                 }
             });
             
+            socket.on('message_status_update', function(data) {
+                updateMessageStatus(data.message_id, data.status);
+            });
+            
             socket.on('user_status', function(data) {
-                // Update user status if it's the other user in this conversation
                 if (data.user_id == currentOtherUserId) {
                     updateChatStatusIndicator(data.status);
                 }
@@ -162,6 +225,16 @@
             
             socket.on('disconnect', function() {
                 console.log('Disconnected from server');
+                isOnline = false;
+                updateOnlineStatus();
+            });
+            
+            socket.on('reconnect', function() {
+                console.log('Reconnected to server');
+                isOnline = true;
+                updateOnlineStatus();
+                socket.emit('join_conversation', {conversation_id: currentConversationId});
+                syncPendingMessages();
             });
         }
         
@@ -171,9 +244,11 @@
             })
             .then(response => {
                 if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error(`HTTP ${response.status}: ${text}`);
-                    });
+                    if (!isOnline) {
+                        // If offline, try to load from local storage
+                        return loadMessagesFromStorage();
+                    }
+                    throw new Error(`HTTP ${response.status}`);
                 }
                 return response.json();
             })
@@ -192,21 +267,38 @@
                 
                 // Scroll to bottom
                 chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                // Save messages to local storage for offline access
+                saveMessagesToStorage(messages);
             })
             .catch(error => {
                 console.error('Error loading messages:', error);
-                
-                // Check if it's an authentication error
-                if (error.message.includes('401') || error.message.includes('403')) {
+                if (!isOnline) {
+                    loadMessagesFromStorage();
+                } else if (error.message.includes('401') || error.message.includes('403')) {
                     alert('Session expired. Please log in again.');
                     window.location.href = '/login';
-                } else {
-                    alert('Error loading messages: ' + error.message);
                 }
             });
         }
         
+        function loadMessagesFromStorage() {
+            const storedMessages = localStorage.getItem(`messages_${currentConversationId}`);
+            if (storedMessages) {
+                const messages = JSON.parse(storedMessages);
+                chatMessages.innerHTML = '';
+                messages.forEach(addMessageToChat);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+        
+        function saveMessagesToStorage(messages) {
+            localStorage.setItem(`messages_${currentConversationId}`, JSON.stringify(messages));
+        }
+        
         function loadUserStatus() {
+            if (!isOnline) return;
+            
             fetch(`/users/status`, {
                 credentials: 'include'
             })
@@ -244,7 +336,6 @@
                     userActivityIndicator.style.display = 'block';
                 }
                 
-                // Hide after 3 seconds if no further updates
                 typingIndicatorTimer = setTimeout(() => {
                     userActivityIndicator.style.display = 'none';
                 }, 3000);
@@ -280,22 +371,24 @@
             
             // Typing indicators
             messageInput.addEventListener('input', function() {
-                // Notify others that user is typing
                 if (messageInput.value.length > 0) {
-                    socket.emit('typing_start', {conversation_id: currentConversationId});
+                    if (isOnline) {
+                        socket.emit('typing_start', {conversation_id: currentConversationId});
+                    }
                     
-                    // Clear any existing timer
                     if (typingTimer) {
                         clearTimeout(typingTimer);
                     }
                     
-                    // Set timer to stop typing indicator after 1 second of inactivity
                     typingTimer = setTimeout(() => {
-                        socket.emit('typing_stop', {conversation_id: currentConversationId});
+                        if (isOnline) {
+                            socket.emit('typing_stop', {conversation_id: currentConversationId});
+                        }
                     }, 1000);
                 } else {
-                    // Input is empty, stop typing indicator
-                    socket.emit('typing_stop', {conversation_id: currentConversationId});
+                    if (isOnline) {
+                        socket.emit('typing_stop', {conversation_id: currentConversationId});
+                    }
                 }
             });
             
@@ -309,6 +402,9 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
+                            // Clear local storage
+                            localStorage.removeItem(`messages_${currentConversationId}`);
+                            localStorage.removeItem(`pending_messages_${currentConversationId}`);
                             window.location.href = '/';
                         } else {
                             alert('Error deleting conversation');
@@ -323,7 +419,6 @@
         }
         
         function addMessageToChat(message) {
-            // Remove empty chat message if it exists
             const emptyChat = chatMessages.querySelector('.empty-chat');
             if (emptyChat) {
                 emptyChat.remove();
@@ -332,7 +427,7 @@
             const messageElement = document.createElement('div');
             const isCurrentUser = message.user_id === currentUserId;
             messageElement.className = `message ${isCurrentUser ? 'sent' : 'received'}`;
-            messageElement.setAttribute('data-message-id', message.id);
+            messageElement.setAttribute('data-message-id', message.id || message.temp_id);
             
             const timestamp = new Date(message.timestamp);
             const timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -354,16 +449,21 @@
                 `;
             }
             
-            let readStatus = '';
-            if (isCurrentUser && message.is_read) {
-                readStatus = '<span class="read-status">✓✓</span>';
-            } else if (isCurrentUser) {
-                readStatus = '<span class="read-status">✓</span>';
+            let statusIndicator = '';
+            if (isCurrentUser) {
+                if (message.status === 'pending') {
+                    statusIndicator = '<span class="message-status pending">🕒</span>';
+                } else if (message.status === 'sent') {
+                    statusIndicator = '<span class="message-status sent">✓</span>';
+                } else if (message.status === 'delivered') {
+                    statusIndicator = '<span class="message-status delivered">✓✓</span>';
+                } else if (message.status === 'read') {
+                    statusIndicator = '<span class="message-status read">✓✓</span>';
+                }
             }
             
-            // Add delete button for user's own messages
             let deleteButton = '';
-            if (isCurrentUser) {
+            if (isCurrentUser && message.id) { // Only allow deletion for messages that have been sent to server
                 deleteButton = `<button class="delete-message-btn" data-message-id="${message.id}">Delete</button>`;
             }
             
@@ -372,7 +472,7 @@
                 <div class="message-info">
                     <span class="username">${message.username}</span>
                     <span class="timestamp">${timeString}</span>
-                    ${readStatus}
+                    ${statusIndicator}
                     ${deleteButton}
                 </div>
             `;
@@ -380,13 +480,27 @@
             chatMessages.appendChild(messageElement);
             chatMessages.scrollTop = chatMessages.scrollHeight;
             
-            // Add event listener for delete button
             const deleteBtn = messageElement.querySelector('.delete-message-btn');
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', function() {
                     const messageId = this.getAttribute('data-message-id');
                     deleteMessage(messageId);
                 });
+            }
+        }
+        
+        function updateMessageStatus(messageId, status) {
+            const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
+            if (messageElement) {
+                const statusElement = messageElement.querySelector('.message-status');
+                if (statusElement) {
+                    statusElement.className = `message-status ${status}`;
+                    if (status === 'sent') {
+                        statusElement.innerHTML = '✓';
+                    } else if (status === 'delivered' || status === 'read') {
+                        statusElement.innerHTML = '✓✓';
+                    }
+                }
             }
         }
         
@@ -411,15 +525,127 @@
             const message = messageInput.value.trim();
             
             if (message) {
-                socket.emit('send_message', {
+                const tempId = 'temp_' + Date.now();
+                const messageData = {
+                    temp_id: tempId,
                     content: message,
-                    conversation_id: currentConversationId
-                });
+                    conversation_id: currentConversationId,
+                    user_id: currentUserId,
+                    username: currentUsername,
+                    type: 'text',
+                    status: 'pending',
+                    timestamp: new Date().toISOString()
+                };
+                
+                // Add to UI immediately
+                addMessageToChat(messageData);
                 messageInput.value = '';
                 
+                // Store as pending
+                pendingMessages.set(tempId, messageData);
+                savePendingMessages();
+                
+                // Try to send if online
+                if (isOnline) {
+                    sendMessageToServer(messageData);
+                }
+                
                 // Stop typing indicator
-                socket.emit('typing_stop', {conversation_id: currentConversationId});
+                if (isOnline) {
+                    socket.emit('typing_stop', {conversation_id: currentConversationId});
+                }
             }
+        }
+        
+        function sendMessageToServer(messageData) {
+            if (!isOnline) return;
+            
+            fetch('/send_message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    content: messageData.content,
+                    conversation_id: messageData.conversation_id,
+                    temp_id: messageData.temp_id
+                }),
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update message status in UI
+                    updateMessageStatus(messageData.temp_id, 'sent');
+                    // Remove from pending
+                    pendingMessages.delete(messageData.temp_id);
+                    savePendingMessages();
+                } else {
+                    updateMessageStatus(messageData.temp_id, 'failed');
+                }
+            })
+            .catch(error => {
+                console.error('Error sending message:', error);
+                updateMessageStatus(messageData.temp_id, 'failed');
+            });
+        }
+        
+        function loadPendingMessages() {
+            const stored = localStorage.getItem(`pending_messages_${currentConversationId}`);
+            if (stored) {
+                const pending = JSON.parse(stored);
+                pending.forEach(msg => {
+                    pendingMessages.set(msg.temp_id, msg);
+                    // Only add to UI if it's not already there
+                    if (!document.querySelector(`.message[data-message-id="${msg.temp_id}"]`)) {
+                        addMessageToChat(msg);
+                    }
+                });
+            }
+        }
+        
+        function savePendingMessages() {
+            const pendingArray = Array.from(pendingMessages.values());
+            localStorage.setItem(`pending_messages_${currentConversationId}`, JSON.stringify(pendingArray));
+        }
+        
+        function syncPendingMessages() {
+            if (!isOnline || syncInProgress || pendingMessages.size === 0) return;
+            
+            syncInProgress = true;
+            const promises = [];
+            
+            pendingMessages.forEach((message, tempId) => {
+                promises.push(
+                    fetch('/send_message', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            content: message.content,
+                            conversation_id: message.conversation_id,
+                            temp_id: tempId
+                        }),
+                        credentials: 'include'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            pendingMessages.delete(tempId);
+                            updateMessageStatus(tempId, 'sent');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error syncing message:', error);
+                    })
+                );
+            });
+            
+            Promise.all(promises).then(() => {
+                syncInProgress = false;
+                savePendingMessages();
+            });
         }
         
         function startRecording() {
@@ -428,8 +654,9 @@
                 return;
             }
             
-            // Notify others that user is recording
-            socket.emit('recording_start', {conversation_id: currentConversationId});
+            if (isOnline) {
+                socket.emit('recording_start', {conversation_id: currentConversationId});
+            }
             
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(stream => {
@@ -445,8 +672,9 @@
                         sendAudioMessage(audioBlob);
                         resetRecordingUI();
                         
-                        // Notify others that user stopped recording
-                        socket.emit('recording_stop', {conversation_id: currentConversationId});
+                        if (isOnline) {
+                            socket.emit('recording_stop', {conversation_id: currentConversationId});
+                        }
                     };
                     
                     mediaRecorder.start();
@@ -456,8 +684,9 @@
                     console.error('Error accessing microphone:', error);
                     alert('Error accessing microphone. Please ensure you have granted permission.');
                     
-                    // Notify others that user stopped recording (due to error)
-                    socket.emit('recording_stop', {conversation_id: currentConversationId});
+                    if (isOnline) {
+                        socket.emit('recording_stop', {conversation_id: currentConversationId});
+                    }
                 });
         }
         
@@ -467,7 +696,6 @@
             recordingSeconds = 0;
             recordingTimerEl.textContent = '0s';
             
-            // Start timer
             recordingTimer = setInterval(() => {
                 recordingSeconds++;
                 recordingTimerEl.textContent = `${recordingSeconds}s`;
@@ -488,29 +716,51 @@
         }
         
         function sendAudioMessage(audioBlob) {
-            const formData = new FormData();
-            formData.append('audio', audioBlob);
+            const tempId = 'temp_audio_' + Date.now();
+            const messageData = {
+                temp_id: tempId,
+                content: URL.createObjectURL(audioBlob),
+                conversation_id: currentConversationId,
+                user_id: currentUserId,
+                username: currentUsername,
+                type: 'audio',
+                status: 'pending',
+                timestamp: new Date().toISOString()
+            };
             
-            fetch(`/upload_audio/${currentConversationId}`, {
-                method: 'POST',
-                body: formData,
-                credentials: 'include'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to upload audio');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (!data.success) {
-                    alert('Error sending audio message');
-                }
-            })
-            .catch(error => {
-                console.error('Error sending audio:', error);
-                alert('Error sending audio message. Please try again.');
-            });
+            // Add to UI immediately
+            addMessageToChat(messageData);
+            
+            // Store as pending
+            pendingMessages.set(tempId, messageData);
+            savePendingMessages();
+            
+            // Try to send if online
+            if (isOnline) {
+                const formData = new FormData();
+                formData.append('audio', audioBlob);
+                formData.append('temp_id', tempId);
+                
+                fetch(`/upload_audio/${currentConversationId}`, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateMessageStatus(tempId, 'sent');
+                        pendingMessages.delete(tempId);
+                        savePendingMessages();
+                    } else {
+                        updateMessageStatus(tempId, 'failed');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error sending audio:', error);
+                    updateMessageStatus(tempId, 'failed');
+                });
+            }
         }
     </script>
 {% endblock %}

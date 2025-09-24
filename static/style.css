@@ -1980,3 +1980,95 @@ body.keyboard-visible {
     border-radius: 15px;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
+
+/* Offline indicator */
+.offline-indicator {
+    background: #ff6b6b;
+    color: white;
+    padding: 10px;
+    text-align: center;
+    font-size: 14px;
+    border-top: 1px solid #ff4757;
+}
+
+/* Message status indicators */
+.message-status {
+    margin-left: 5px;
+    font-size: 12px;
+}
+
+.message-status.pending {
+    color: #ffa502;
+}
+
+.message-status.sent {
+    color: #747d8c;
+}
+
+.message-status.delivered {
+    color: #2ed573;
+}
+
+.message-status.read {
+    color: #1e90ff;
+}
+
+.message-status.failed {
+    color: #ff4757;
+}
+
+/* Offline queue notification */
+.queue-notification {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: #2ed573;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    z-index: 1000;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+/* Network status in header */
+.network-status {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.network-status.online {
+    background: #2ed573;
+}
+
+.network-status.offline {
+    background: #ff4757;
+}
+
+/* Responsive design for offline mode */
+@media (max-width: 768px) {
+    .offline-indicator {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+}
+
+/* Loading states for offline sync */
+.sync-loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.sync-progress {
+    display: none;
+    text-align: center;
+    padding: 10px;
+    background: #f1f2f6;
+}
+
+.sync-progress.visible {
+    display: block;
+}
